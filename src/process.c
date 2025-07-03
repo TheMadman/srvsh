@@ -15,9 +15,6 @@
 #define arrlength libadt_util_arrlength
 #define arrend libadt_util_arrend
 
-#define _STR(PARAM) #PARAM
-#define STR(PARAM) _STR(PARAM)
-
 // temp gettext wrapper
 #define _(str) str
 
@@ -40,24 +37,25 @@ int fork_wrapper(
 			// it's up to the command to be able to
 			// run as a top-level command, or break
 			// if it can't
-			if (getpeername(srv, (struct sockaddr*)&addr, &addrlen) == 0) {
-				close(srv);
-
-				srv = socket(AF_UNIX, SOCK_STREAM, 0);
-				if (srv < 0) {
-					perror(_("Failed to recreate srv socket"));
-					exit(EXIT_FAILURE);
-				}
-				if (connect(srv, (struct sockaddr*)&addr, addrlen) < 0) {
-					perror(_("Failed to connect new srv socket"));
-					exit(EXIT_FAILURE);
-				}
-
-				if (dup2(srv, SRV_FILENO) == -1) {
-					perror(_("Failed to assign SRV_FILENO"));
-					exit(EXIT_FAILURE);
-				}
-			}
+//			if (getpeername(srv, (struct sockaddr*)&addr, &addrlen) == 0) {
+//				close(srv);
+//
+//				srv = socket(AF_UNIX, SOCK_STREAM, 0);
+//				if (srv < 0) {
+//					perror(_("Failed to recreate srv socket"));
+//					exit(EXIT_FAILURE);
+//				}
+//				if (connect(srv, (struct sockaddr*)&addr, addrlen) < 0) {
+//					perror(_("Failed to connect new srv socket"));
+//					exit(EXIT_FAILURE);
+//				}
+//
+//				if (dup2(srv, SRV_FILENO) == -1) {
+//					perror(_("Failed to assign SRV_FILENO"));
+//					exit(EXIT_FAILURE);
+//				}
+//			}
+			dup2(srv, SRV_FILENO);
 
 			// Similarly, if we get here and there's no
 			// clients, that's also fine. Commands that

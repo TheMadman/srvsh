@@ -5,24 +5,25 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
-#include <scallop-lang/token.h>
+#include <scallop-lang/classifier.h>
+#include <scallop-lang/lex.h>
 
 #include "srvsh/srvsh.h"
 #include "srvsh/process.h"
 
 typedef struct libadt_lptr lptr_t;
 typedef struct libadt_const_lptr const_lptr_t;
-typedef struct scallop_lang_token token_t;
+typedef struct scallop_lang_lex token_t;
 
-#define lex_word scallop_lang_lex_word
-#define lex_word_separator scallop_lang_lex_word_separator
-#define lex_unexpected scallop_lang_lex_unexpected
-#define lex_end scallop_lang_lex_end
-#define lex_curly_block scallop_lang_lex_curly_block
-#define lex_curly_block_end scallop_lang_lex_curly_block_end
-#define lex_square_block scallop_lang_lex_square_block
-#define lex_square_block_end scallop_lang_lex_square_block_end
-#define token_next scallop_lang_token_next
+#define lex_word scallop_lang_classifier_word
+#define lex_word_separator scallop_lang_classifier_word_separator
+#define lex_unexpected scallop_lang_classifier_unexpected
+#define lex_end scallop_lang_classifier_end
+#define lex_curly_block scallop_lang_classifier_curly_block
+#define lex_curly_block_end scallop_lang_classifier_curly_block_end
+#define lex_square_block scallop_lang_classifier_square_block
+#define lex_square_block_end scallop_lang_classifier_square_block_end
+#define token_next scallop_lang_lex_next
 
 #define lptr_raw libadt_lptr_raw
 #define lptr_index libadt_lptr_index
@@ -67,7 +68,7 @@ static token_t parse_statement_impl(
 			count
 		);
 	} else if (token.type == lex_word) {
-		ssize_t size = scallop_lang_token_normalize_word(
+		ssize_t size = scallop_lang_lex_normalize_word(
 			token.value,
 			(lptr_t){ 0 }
 		);
@@ -76,7 +77,7 @@ static token_t parse_statement_impl(
 
 		token_t result = { 0 };
 		LPTR_WITH(word, (size_t)size + 1, sizeof(char)) {
-			scallop_lang_token_normalize_word(
+			scallop_lang_lex_normalize_word(
 				token.value,
 				word
 			);
@@ -94,14 +95,19 @@ static token_t parse_statement_impl(
 		}
 		return result;
 	} else if (token.type == lex_curly_block) {
-		int sockets[2] = { 0 };
-		if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) < 0)
+		cli = socket(AF_UNIX, SOCK_STREAM, 0);
+		if (cli < 0)
 			return (token_t){ 0 };
 
-		cli = sockets[0];
+		struct sockaddr_un addr = { .sun_family = AF_UNIX };
+
+		// Depends on autobinding, is this Linux-specific?
+		if (bind(cli, (struct sockaddr*)&addr, sizeof(addr.sun_family)) < 0)
+			return (token_t){ 0 };
+
 		// TODO: don't rely on the script always having
 		// a statement separator after a closing curly bracket
-		token = parse_script_impl(token, sockets[1]);
+		token = parse_script_impl(token, cli);
 		if (token.type != lex_curly_block_end)
 			return (token_t){ 0 };
 	} else /* if (token.type == lex_statement_separator) and friends */ {
@@ -162,7 +168,7 @@ static token_t parse_script_impl(token_t token, int srv)
 int srvsh_parse_script(const_lptr_t script, int srv)
 {
 	token_t last = parse_script_impl(
-		scallop_lang_token_init(script),
+		scallop_lang_lex_init(script),
 		srv
 	);
 

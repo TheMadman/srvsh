@@ -13,7 +13,7 @@
 
 #include <libadt/lptr.h>
 #include <libadt/util.h>
-#include <scallop-lang/token.h>
+#include <scallop-lang/lex.h>
 
 // gettext placeholder
 #define _(str) str
