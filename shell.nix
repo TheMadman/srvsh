@@ -1,9 +1,9 @@
 let
 	pkgs = import <nixpkgs> {};
-	guish = import ./.;
+	srvsh = import ./.;
 in
 pkgs.mkShell {
-	inputsFrom = [guish];
+	inputsFrom = [srvsh];
 	nativeBuildInputs = [pkgs.gdb pkgs.graphviz pkgs.doxygen];
 	shellHook = ''
 		export CFLAGS='-Wall -Wextra -Wshadow -fsanitize=address -fsanitize=leak -fsanitize=undefined'

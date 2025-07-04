@@ -9,8 +9,8 @@ let
 	libadt = callFromGitHub {
 		owner = "TheMadman";
 		repo = "libadt";
-		rev = "6ab226d4f0b5fb91d00d81810b60e82a88f1fd99";
-		hash = "sha256-87YhgCmCBvJaZ2w+I1BKILUOSuF8/Isip3FWAPDYZIQ=";
+		rev = "b8e1fea53d4a3a120254b97f1331123a6fd5fcc9";
+		hash = "sha256-cAhYJ8CU9vtgzMnO0CJUyno2v4YN3m/YURtA1pgDL2s=";
 	} {};
 	scallop-lang = callFromGitHub {
 		owner = "TheMadman";
