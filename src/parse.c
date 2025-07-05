@@ -38,24 +38,19 @@ typedef struct word_list_s {
 
 static token_t parse_statement_impl(
 	token_t token,
-	int srv,
 	word_list_t *previous,
 	int count
 );
 static token_t parse_script_impl(
-	token_t token,
-	int srv
+	token_t token
 );
 
 static token_t parse_statement_impl(
 	token_t token,
-	int srv,
 	word_list_t *previous,
 	int count
 )
 {
-	int cli = CLI_FILENO;
-
 	token = token_next(token);
 
 	if (token.type == lex_unexpected) {
@@ -63,7 +58,6 @@ static token_t parse_statement_impl(
 	} else if (token.type == lex_word_separator) {
 		return parse_statement_impl(
 			token,
-			srv,
 			previous,
 			count
 		);
@@ -88,30 +82,31 @@ static token_t parse_statement_impl(
 			};
 			result = parse_statement_impl(
 				token,
-				srv,
 				&current,
 				++count
 			);
 		}
 		return result;
 	} else if (token.type == lex_curly_block) {
-		cli = socket(AF_UNIX, SOCK_STREAM, 0);
+		// TODO: don't rely on the script always having
+		// a statement separator after a closing curly bracket
+		token = parse_script_impl(token);
+		if (token.type != lex_curly_block_end)
+			return (token_t){ 0 };
+		return token;
+	} else /* if (token.type == lex_statement_separator) and friends */ {
+		int error = -1;
+		int cli = socket(AF_UNIX, SOCK_STREAM, 0);
 		if (cli < 0)
 			return (token_t){ 0 };
 
+		// TODO: depends on Linux-specific auto-binding
 		struct sockaddr_un addr = { .sun_family = AF_UNIX };
-
-		// Depends on autobinding, is this Linux-specific?
-		if (bind(cli, (struct sockaddr*)&addr, sizeof(addr.sun_family)) < 0)
+		if (bind(cli, (struct sockaddr*)&addr, sizeof(addr.sun_family)) < 0) {
+			close(cli);
 			return (token_t){ 0 };
+		}
 
-		// TODO: don't rely on the script always having
-		// a statement separator after a closing curly bracket
-		token = parse_script_impl(token, cli);
-		if (token.type != lex_curly_block_end)
-			return (token_t){ 0 };
-	} else /* if (token.type == lex_statement_separator) and friends */ {
-		int error = -1;
 		LPTR_WITH(statement, (size_t)count, sizeof(lptr_t)) {
 			for (--count; count >= 0; --count) {
 				const_lptr_t *item = lptr_raw(
@@ -121,18 +116,21 @@ static token_t parse_statement_impl(
 				previous = previous->next;
 			}
 
-			error = fork_wrapper(const_lptr(statement), srv, cli);
+			error = fork_wrapper(const_lptr(statement), cli);
 		}
-		if (error < 0)
+		if (error < 0) {
+			close(cli);
 			return (token_t){ 0 };
+		}
+		token = parse_script_impl(token);
+		close(cli);
 		return token;
 	}
 
 	return token;
-#undef HANDLE_ERROR
 }
 
-static token_t parse_script_impl(token_t token, int srv)
+static token_t parse_script_impl(token_t token)
 {
 	token_t next = token_next(token);
 
@@ -146,30 +144,29 @@ static token_t parse_script_impl(token_t token, int srv)
 		return next;
 
 	if (next.type == lex_word) {
-		next = parse_statement_impl(next, srv, NULL, 0);
-		return parse_script_impl(next, srv);
+		next = parse_statement_impl(next, NULL, 0);
+		return parse_script_impl(next);
 	}
 
 	// A curly bracket block at the top level is identical
 	// to no curly bracket block
 	if (next.type == lex_curly_block) {
-		token_t end_block = parse_script_impl(next, srv);
+		token_t end_block = parse_script_impl(next);
 		if (end_block.type != lex_curly_block_end) {
 			end_block.type = lex_unexpected;
 			return end_block;
 		}
-		return parse_script_impl(end_block, srv);
+		return parse_script_impl(end_block);
 	}
 
 	// skips comments, word/statement separators etc.
-	return parse_script_impl(next, srv);
+	return parse_script_impl(next);
 }
 
-int srvsh_parse_script(const_lptr_t script, int srv)
+int srvsh_parse_script(const_lptr_t script)
 {
 	token_t last = parse_script_impl(
-		scallop_lang_lex_init(script),
-		srv
+		scallop_lang_lex_init(script)
 	);
 
 	return last.type == lex_end ? 0 : -1;

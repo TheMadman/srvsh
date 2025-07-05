@@ -34,10 +34,7 @@ extern "C" {
  * 	srvsh process to manage them and returning the
  * 	PID of the spawned shell.
  */
-int srvsh_parse_script(
-	struct libadt_const_lptr script,
-	int guisrv
-);
+int srvsh_parse_script(struct libadt_const_lptr script);
 
 #ifdef __cplusplus
 } // extern "C"

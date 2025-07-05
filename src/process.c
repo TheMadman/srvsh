@@ -22,7 +22,6 @@ typedef struct libadt_const_lptr clptr;
 
 int fork_wrapper(
 	clptr statement,
-	int srv,
 	int cli
 )
 {
@@ -31,37 +30,8 @@ int fork_wrapper(
 		case -1:
 			return -1;
 		case 0: {
-			struct sockaddr_un addr = { 0 };
-			socklen_t addrlen = sizeof(addr);
-			// If we have no server, that's fine -
-			// it's up to the command to be able to
-			// run as a top-level command, or break
-			// if it can't
-//			if (getpeername(srv, (struct sockaddr*)&addr, &addrlen) == 0) {
-//				close(srv);
-//
-//				srv = socket(AF_UNIX, SOCK_STREAM, 0);
-//				if (srv < 0) {
-//					perror(_("Failed to recreate srv socket"));
-//					exit(EXIT_FAILURE);
-//				}
-//				if (connect(srv, (struct sockaddr*)&addr, addrlen) < 0) {
-//					perror(_("Failed to connect new srv socket"));
-//					exit(EXIT_FAILURE);
-//				}
-//
-//				if (dup2(srv, SRV_FILENO) == -1) {
-//					perror(_("Failed to assign SRV_FILENO"));
-//					exit(EXIT_FAILURE);
-//				}
-//			}
-			dup2(srv, SRV_FILENO);
-
-			// Similarly, if we get here and there's no
-			// clients, that's also fine. Commands that
-			// expect clients but have no client fd should
-			// just break
-			dup2(cli, CLI_FILENO);
+			dup2(cli, SRV_FILENO);
+			close(cli);
 
 			exec_command(statement);
 			// we only get here if execvp() errors

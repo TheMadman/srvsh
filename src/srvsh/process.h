@@ -29,11 +29,7 @@ extern "C" {
  * \file
  */
 
-int fork_wrapper(
-	struct libadt_const_lptr statement,
-	int guisrv,
-	int guicli
-);
+int fork_wrapper(struct libadt_const_lptr statement, int cli);
 int exec_command(struct libadt_const_lptr statement);
 
 #ifdef __cplusplus

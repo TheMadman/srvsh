@@ -37,14 +37,6 @@ extern "C" {
  */
 #define SRV_FILENO 3
 
-/**
- * \brief Constant file descriptor for a Client.
- *
- * This is set up by the srvsh to be a listening socket
- * for client connections, if any such clients exist.
- */
-#define CLI_FILENO 4
-
 #ifdef __cplusplus
 } // extern "C"
 #endif

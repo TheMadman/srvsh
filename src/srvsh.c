@@ -62,7 +62,7 @@ int main(int argc, char **argv)
 		.length = (ssize_t)length,
 	};
 
-	if (srvsh_parse_script(file, SRV_FILENO) < 0)
+	if (srvsh_parse_script(file) < 0)
 		perror_exit(_("Failed to execute script"));
 
 	int worst_return = EXIT_SUCCESS;
