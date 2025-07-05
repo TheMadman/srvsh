@@ -144,8 +144,7 @@ static token_t parse_script_impl(token_t token)
 		return next;
 
 	if (next.type == lex_word) {
-		next = parse_statement_impl(next, NULL, 0);
-		return parse_script_impl(next);
+		return parse_statement_impl(next, NULL, 0);
 	}
 
 	// A curly bracket block at the top level is identical
