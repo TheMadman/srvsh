@@ -15,8 +15,8 @@ let
 	scallop-lang = callFromGitHub {
 		owner = "TheMadman";
 		repo = "scallop-lang";
-		rev = "16ac504483e703ce3bb72fd5e21cf46d71f11f1e";
-		hash = "sha256-mx7CcRnr3tetj8bOqpqhgN0VzssSu9twsMeRx+bHkWA=";
+		rev = "06a53652ab8d41ab264bbe0bb1389831573f450d";
+		hash = "sha256-rjilPGDJ9WyGv0Ph3orfXFyn5krCiFYqY9tSZl+9uWE=";
 	} { inherit libadt; };
 in
 pkgs.callPackage ./build.nix { inherit libadt scallop-lang; }
