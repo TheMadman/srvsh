@@ -149,7 +149,7 @@ static token_t parse_statement_impl(
 			case 0:
 				for (int i = sockets[0]; i > SRV_FILENO; i--)
 					close(i);
-				if (dup2(SRV_FILENO, sockets[1]) < 0)
+				if (dup2(sockets[1], SRV_FILENO) < 0)
 					exit(1);
 				close(sockets[1]);
 				token = parse_script_impl(token);
@@ -180,7 +180,7 @@ static token_t parse_statement_impl(
 			case 0:
 				for (int i = sockets[0]; i > SRV_FILENO; i--)
 					close(i);
-				if (dup2(SRV_FILENO, sockets[1]) < 0)
+				if (dup2(sockets[1], SRV_FILENO) < 0)
 					exit(1);
 				close(sockets[1]);
 				exec_word_list(previous, count);
