@@ -36,6 +36,45 @@ typedef struct word_list_s {
 	struct word_list_s *next;
 } word_list_t;
 
+static bool is_end_token(token_t token)
+{
+	return token.type == lex_end
+		|| token.type == lex_curly_block_end
+		|| token.type == lex_square_block_end
+		|| token.type == lex_unexpected;
+}
+
+static int exec_word_list(word_list_t *words, int count)
+{
+	int error = -1;
+	LPTR_WITH(statement, (size_t)count, sizeof(lptr_t)) {
+		for (--count; count >= 0; --count) {
+			const_lptr_t *item = lptr_raw(
+				lptr_index(statement, count)
+			);
+			*item = const_lptr(words->word);
+			words = words->next;
+		}
+
+		error = exec_command(const_lptr(statement));
+	}
+	return error;
+}
+
+static token_t skip_context(token_t token)
+{
+	token = token_next(token);
+	while (token.type != lex_curly_block_end) {
+		if (token.type == lex_end || token.type == lex_unexpected)
+			return token;
+		else if (token.type == lex_curly_block)
+			token = skip_context(token);
+		else
+			token = token_next(token);
+	}
+	return token;
+}
+
 static token_t parse_statement_impl(
 	token_t token,
 	word_list_t *previous,
@@ -88,43 +127,69 @@ static token_t parse_statement_impl(
 		}
 		return result;
 	} else if (token.type == lex_curly_block) {
-		// TODO: don't rely on the script always having
-		// a statement separator after a closing curly bracket
-		token = parse_script_impl(token);
-		if (token.type != lex_curly_block_end)
+		/*
+		 * This whole stupid confusing mess is to try to
+		 * prevent "younger siblings" from inheriting file
+		 * descriptors to their "older siblings", which are
+		 * intended to be opened _exclusively_ for their
+		 * parent. No, I don't know how to phrase that better.
+		 *
+		 * I _should_ think about this more, but I'm sick to
+		 * death of thinking about this as-is. Fuck elegant, I just
+		 * want this bastard to work.
+		 */
+		int sockets[2] = { 0 };
+		if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) < 0)
 			return (token_t){ 0 };
-		return token;
+		switch (fork()) {
+			case -1:
+				close(sockets[0]);
+				close(sockets[1]);
+				return (token_t){ 0 };
+			case 0:
+				for (int i = sockets[0]; i > SRV_FILENO; i--)
+					close(i);
+				if (dup2(SRV_FILENO, sockets[1]) < 0)
+					exit(1);
+				close(sockets[1]);
+				token = parse_script_impl(token);
+				const bool error = token.type == NULL
+					|| token.type == lex_unexpected;
+				if (error)
+					exit(1);
+				exec_word_list(previous, count);
+				exit(1);
+			default:
+				close(sockets[1]);
+				token = skip_context(token);
+				if (token.type != lex_curly_block_end) {
+					token.type = lex_unexpected;
+					return token;
+				}
+				return token_next(token);
+		}
 	} else /* if (token.type == lex_statement_separator) and friends */ {
-		int error = -1;
-		int cli = socket(AF_UNIX, SOCK_STREAM, 0);
-		if (cli < 0)
+		int sockets[2] = { 0 };
+		if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) < 0)
 			return (token_t){ 0 };
-
-		// TODO: depends on Linux-specific auto-binding
-		struct sockaddr_un addr = { .sun_family = AF_UNIX };
-		if (bind(cli, (struct sockaddr*)&addr, sizeof(addr.sun_family)) < 0) {
-			close(cli);
-			return (token_t){ 0 };
+		switch (fork()) {
+			case -1:
+				close(sockets[0]);
+				close(sockets[1]);
+				return (token_t){ 0 };
+			case 0:
+				for (int i = sockets[0]; i > SRV_FILENO; i--)
+					close(i);
+				if (dup2(SRV_FILENO, sockets[1]) < 0)
+					exit(1);
+				close(sockets[1]);
+				exec_word_list(previous, count);
+				exit(1);
+				break;
+			default:
+				close(sockets[1]);
+				return token;
 		}
-
-		LPTR_WITH(statement, (size_t)count, sizeof(lptr_t)) {
-			for (--count; count >= 0; --count) {
-				const_lptr_t *item = lptr_raw(
-					lptr_index(statement, count)
-				);
-				*item = const_lptr(previous->word);
-				previous = previous->next;
-			}
-
-			error = fork_wrapper(const_lptr(statement), cli);
-		}
-		if (error < 0) {
-			close(cli);
-			return (token_t){ 0 };
-		}
-		token = parse_script_impl(token);
-		close(cli);
-		return token;
 	}
 
 	return token;
@@ -132,41 +197,31 @@ static token_t parse_statement_impl(
 
 static token_t parse_script_impl(token_t token)
 {
-	token_t next = token_next(token);
+	for (;!is_end_token(token);) {
+		token_t next = token_next(token);
 
-	const bool end
-		= next.type == lex_end
-		|| next.type == lex_curly_block_end
-		|| next.type == lex_square_block_end
-		|| next.type == lex_unexpected;
-
-	if (end)
-		return next;
-
-	if (next.type == lex_word) {
-		return parse_statement_impl(next, NULL, 0);
-	}
-
-	// A curly bracket block at the top level is identical
-	// to no curly bracket block
-	if (next.type == lex_curly_block) {
-		token_t end_block = parse_script_impl(next);
-		if (end_block.type != lex_curly_block_end) {
-			end_block.type = lex_unexpected;
-			return end_block;
+		if (next.type == lex_word) {
+			// TODO: don't re-lex next
+			token = parse_statement_impl(token, NULL, 0);
+		} else if (next.type == lex_curly_block) {
+			// A curly bracket block at the top level is identical
+			// to no curly bracket block
+			token = parse_script_impl(next);
+			if (token.type != lex_curly_block_end) {
+				token.type = lex_unexpected;
+				return token;
+			}
+		} else {
+			token = next;
 		}
-		return parse_script_impl(end_block);
 	}
-
-	// skips comments, word/statement separators etc.
-	return parse_script_impl(next);
+	return token;
 }
 
 int srvsh_parse_script(const_lptr_t script)
 {
-	token_t last = parse_script_impl(
-		scallop_lang_lex_init(script)
-	);
-
-	return last.type == lex_end ? 0 : -1;
+	token_t last = parse_script_impl(scallop_lang_lex_init(script));
+	const bool error = last.type == NULL
+		|| last.type == lex_unexpected;
+	return error ? -1 : 0;
 }

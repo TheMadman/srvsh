@@ -68,7 +68,8 @@ int main(int argc, char **argv)
 	int worst_return = EXIT_SUCCESS;
 	errno = 0;
 	for (int wstatus = 0; wait(&wstatus) > 0;)
-		worst_return = MAX(worst_return, WEXITSTATUS(wstatus));
+		if (WIFEXITED(wstatus))
+			worst_return = MAX(worst_return, WEXITSTATUS(wstatus));
 
 	return worst_return;
 }

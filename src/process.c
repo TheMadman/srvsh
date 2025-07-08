@@ -20,32 +20,6 @@
 
 typedef struct libadt_const_lptr clptr;
 
-int fork_wrapper(
-	clptr statement,
-	int cli
-)
-{
-	int pid = fork();
-	switch (pid) {
-		case -1:
-			return -1;
-		case 0: {
-			dup2(cli, SRV_FILENO);
-			close(cli);
-
-			exec_command(statement);
-			// we only get here if execvp() errors
-			const char *command = clptr_raw(*(clptr*)clptr_raw(statement));
-			fprintf(stderr, _("Failed to execute %s: %s\n"), command, strerror(errno));
-			exit(EXIT_FAILURE);
-		}
-		default: {
-			// do we need anything else here?
-			return pid;
-		}
-	}
-}
-
 int exec_command(clptr statement)
 {
 	// Maybe I should put this logic in libadt somewhere
