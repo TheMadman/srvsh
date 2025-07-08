@@ -65,12 +65,16 @@ static token_t skip_context(token_t token)
 {
 	token = token_next(token);
 	while (token.type != lex_curly_block_end) {
-		if (token.type == lex_end || token.type == lex_unexpected)
+		if (token.type == lex_end || token.type == lex_unexpected) {
 			return token;
-		else if (token.type == lex_curly_block)
+		} else if (token.type == lex_curly_block) {
 			token = skip_context(token);
-		else
+			if (token.type == lex_end || token.type == lex_unexpected)
+				return token;
 			token = token_next(token);
+		} else {
+			token = token_next(token);
+		}
 	}
 	return token;
 }
