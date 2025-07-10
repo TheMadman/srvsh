@@ -37,6 +37,23 @@ extern "C" {
  */
 #define SRV_FILENO 3
 
+/**
+ * \brief Constant value for the lowest file descriptor a client
+ * 	can be.
+ *
+ * Note that a program may have no clients, in which case, the
+ * cli_end() function will return this value.
+ */
+#define CLI_BEGIN 4
+
+/**
+ * \brief Returns one past the last client file descriptor.
+ *
+ * All client file descriptors can be accessed with
+ * for(int i = CLI_BEGIN; i < cli_end(); i++).
+ */
+int cli_end();
+
 #ifdef __cplusplus
 } // extern "C"
 #endif

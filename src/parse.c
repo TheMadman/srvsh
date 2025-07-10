@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <wait.h>
 
 #include <scallop-lang/classifier.h>
 #include <scallop-lang/lex.h>
@@ -13,7 +14,10 @@
 
 #define _STR(A) #A
 #define STR(A) _STR(A)
-#define SRV_FILENO_STR STR(SRV_FILENO)
+#define MAX libadt_util_max
+
+// mimicks the behaviour of bash
+#define SIGNAL_RETURN_VALUE(sig) (128 + sig)
 
 typedef struct libadt_lptr lptr_t;
 typedef struct libadt_const_lptr const_lptr_t;
@@ -40,7 +44,7 @@ typedef struct word_list_s {
 	struct word_list_s *next;
 } word_list_t;
 
-static int get_last_client()
+static int get_clients_end()
 {
 	// probably a better way to do this
 	int fd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -48,7 +52,7 @@ static int get_last_client()
 		return -1;
 
 	close(fd);
-	return fd - 1;
+	return fd;
 }
 
 static bool is_end_token(token_t token)
@@ -176,21 +180,21 @@ static token_t parse_statement_impl(
 					|| token.type == lex_unexpected;
 				if (error)
 					exit(1);
-				int last_client = get_last_client();
-				if (last_client < 0)
+				int clients_end = get_clients_end();
+				if (clients_end < 0)
 					exit(1);
 
 				// 21 characters should be enough for a 64
 				// bit integer + null terminator
 				// and if we have that many clients then
 				// I have other concerns
-				char last_client_str[21] = { 0 };
+				char clients_end_str[21] = { 0 };
 				if (
 					snprintf(
-						last_client_str,
-						sizeof(last_client_str),
+						clients_end_str,
+						sizeof(clients_end_str),
 						"%d",
-						last_client
+						clients_end
 					) < 0
 				) {
 					exit(1);
@@ -199,15 +203,30 @@ static token_t parse_statement_impl(
 				const bool overwrite = true;
 				if (
 					setenv(
-						"SRVSH_LAST_CLIENT",
-						last_client_str,
+						"SRVSH_CLIENTS_END",
+						clients_end_str,
 						overwrite
 					) < 0
 				) {
 					exit(1);
 				}
-				exec_word_list(previous, count);
-				exit(1);
+				// I should clean this shit up sometime
+				switch (fork()) {
+					case -1:
+						exit(1);
+					case 0:
+						exec_word_list(previous, count);
+						exit(1);
+					default: {
+						int worst_return = EXIT_SUCCESS;
+						for (int wstatus = 0; wait(&wstatus) > 0;)
+							if (WIFEXITED(wstatus))
+								worst_return = MAX(worst_return, WEXITSTATUS(wstatus));
+							else if (WIFSIGNALED(wstatus))
+								worst_return = MAX(worst_return, SIGNAL_RETURN_VALUE(WTERMSIG(wstatus)));
+						exit(worst_return);
+					}
+				}
 			default:
 				close(sockets[1]);
 				token = skip_context(token);
@@ -232,7 +251,7 @@ static token_t parse_statement_impl(
 				if (dup2(sockets[1], SRV_FILENO) < 0)
 					exit(1);
 				close(sockets[1]);
-				setenv("SRVSH_LAST_CLIENT", SRV_FILENO_STR, 1);
+				setenv("SRVSH_CLIENTS_END", STR(CLI_BEGIN), 1);
 				exec_word_list(previous, count);
 				exit(1);
 				break;
