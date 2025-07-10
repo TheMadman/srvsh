@@ -11,6 +11,10 @@
 #include "srvsh/srvsh.h"
 #include "srvsh/process.h"
 
+#define _STR(A) #A
+#define STR(A) _STR(A)
+#define SRV_FILENO_STR STR(SRV_FILENO)
+
 typedef struct libadt_lptr lptr_t;
 typedef struct libadt_const_lptr const_lptr_t;
 typedef struct scallop_lang_lex token_t;
@@ -35,6 +39,17 @@ typedef struct word_list_s {
 	lptr_t word;
 	struct word_list_s *next;
 } word_list_t;
+
+static int get_last_client()
+{
+	// probably a better way to do this
+	int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+	if (fd < 0)
+		return -1;
+
+	close(fd);
+	return fd - 1;
+}
 
 static bool is_end_token(token_t token)
 {
@@ -161,6 +176,36 @@ static token_t parse_statement_impl(
 					|| token.type == lex_unexpected;
 				if (error)
 					exit(1);
+				int last_client = get_last_client();
+				if (last_client < 0)
+					exit(1);
+
+				// 21 characters should be enough for a 64
+				// bit integer + null terminator
+				// and if we have that many clients then
+				// I have other concerns
+				char last_client_str[21] = { 0 };
+				if (
+					snprintf(
+						last_client_str,
+						sizeof(last_client_str),
+						"%d",
+						last_client
+					) < 0
+				) {
+					exit(1);
+				}
+
+				const bool overwrite = true;
+				if (
+					setenv(
+						"SRVSH_LAST_CLIENT",
+						last_client_str,
+						overwrite
+					) < 0
+				) {
+					exit(1);
+				}
 				exec_word_list(previous, count);
 				exit(1);
 			default:
@@ -187,6 +232,7 @@ static token_t parse_statement_impl(
 				if (dup2(sockets[1], SRV_FILENO) < 0)
 					exit(1);
 				close(sockets[1]);
+				setenv("SRVSH_LAST_CLIENT", SRV_FILENO_STR, 1);
 				exec_word_list(previous, count);
 				exit(1);
 				break;
