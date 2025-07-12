@@ -52,7 +52,25 @@ extern "C" {
  * All client file descriptors can be accessed with
  * for(int i = CLI_BEGIN; i < cli_end(); i++).
  */
-int cli_end();
+int cli_end(void);
+
+struct srvsh_header {
+	int opcode;
+	ssize_t size;
+};
+
+/**
+ * \brief Returns a file descriptor to the opcode database
+ * 	defined by the environment variable SRVSH_DATABASE.
+ *
+ * This function always opens a new file descriptor. File
+ * descriptors must be closed with close(2).
+ *
+ * \returns -1 if SRVSH_DATABASE is not set, or the path cannot
+ * 	be opened for reading. Returns a new file descriptor
+ * 	otherwise.
+ */
+int open_opcode_database(void);
 
 #ifdef __cplusplus
 } // extern "C"
