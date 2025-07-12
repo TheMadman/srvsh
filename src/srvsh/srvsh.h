@@ -20,6 +20,7 @@
 #define SRVSH_SRVSH
 
 #include <stddef.h>
+#include <sys/types.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -60,17 +61,14 @@ struct srvsh_header {
 };
 
 /**
- * \brief Returns a file descriptor to the opcode database
+ * \brief Returns a pointer to the opcode database
  * 	defined by the environment variable SRVSH_DATABASE.
  *
- * This function always opens a new file descriptor. File
- * descriptors must be closed with close(2).
- *
- * \returns -1 if SRVSH_DATABASE is not set, or the path cannot
- * 	be opened for reading. Returns a new file descriptor
+ * \returns NULL if SRVSH_DATABASE is not set, or the path cannot
+ * 	be opened for reading. Returns a pointer to the database
  * 	otherwise.
  */
-int open_opcode_database(void);
+void *open_opcode_database(void);
 
 #ifdef __cplusplus
 } // extern "C"
