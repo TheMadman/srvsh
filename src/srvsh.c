@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <sys/mman.h>
+#include <string.h>
 
 int cli_end(void)
 {
@@ -13,12 +14,9 @@ int cli_end(void)
 	return _cli_end;
 }
 
-void *open_opcode_database(void)
+opcode_database *open_opcode_database(void)
 {
-	static const char *db_path = NULL;
-
-	if (!db_path)
-		db_path = getenv("SRVSH_DATABASE");
+	const char *db_path = getenv("SRVSH_DATABASE");
 	if (!db_path)
 		return NULL;
 	int fd = open(db_path, O_RDONLY);
@@ -31,7 +29,7 @@ void *open_opcode_database(void)
 		return NULL;
 	}
 
-	void *raw_file = mmap(
+	opcode_database *raw_file = mmap(
 		NULL,
 		(size_t)length,
 		PROT_READ,
@@ -41,4 +39,13 @@ void *open_opcode_database(void)
 	);
 	close(fd);
 	return raw_file;
+}
+
+void close_opcode_database(opcode_database *db)
+{
+	/*
+	 * TODO: check if the file is null-terminated
+	 * plaintext in open_opcode_database()
+	 */
+	munmap(db, strlen(db));
 }
