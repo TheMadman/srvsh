@@ -47,7 +47,7 @@ extern "C" {
  */
 #define CLI_BEGIN 4
 
-typedef void opcode_database;
+typedef void opcode_db;
 
 /**
  * \brief Returns one past the last client file descriptor.
@@ -73,15 +73,28 @@ struct srvsh_header {
  * 	be opened for reading. Returns a pointer to the database
  * 	otherwise.
  */
-opcode_database *open_opcode_database(void);
+opcode_db *open_opcode_db(void);
 
 /**
  * \brief Release an opcode database opened with
- * 	open_opcode_database().
+ * 	open_opcode_db().
  *
- * \param db A database previously opened with open_opcode_database().
+ * \param db A database previously opened with open_opcode_db(),
+ * 	or NULL to close the statically-allocated database used by
+ * 	writesrv() etc.
  */
-void close_opcode_database(opcode_database *db);
+void close_opcode_db(opcode_db *db);
+
+/**
+ * \brief Queries the database given in db for the opcode with
+ * 	the given name.
+ *
+ * \param db The database to query.
+ * \param name The name to query.
+ *
+ * \returns A positive integer on match, or -1 on failure.
+ */
+int get_opcode(const opcode_db *db, const char *name);
 
 #ifdef __cplusplus
 } // extern "C"
