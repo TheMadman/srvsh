@@ -188,7 +188,8 @@ static token_t parse_statement_impl(
 				// bit integer + null terminator
 				// and if we have that many clients then
 				// I have other concerns
-				char clients_end_str[21] = { 0 };
+				typedef char int64_str[21];
+				int64_str clients_end_str = { 0 };
 				if (
 					snprintf(
 						clients_end_str,
