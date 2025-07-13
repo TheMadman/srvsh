@@ -57,9 +57,12 @@ typedef void opcode_database;
  */
 int cli_end(void);
 
+/**
+ * \brief A header prefix for IPC between servers/clients.
+ */
 struct srvsh_header {
 	int opcode;
-	ssize_t size;
+	int size;
 };
 
 /**
