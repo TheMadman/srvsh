@@ -8,6 +8,10 @@
 #include <string.h>
 #include <ctype.h>
 #include <limits.h>
+#include <sys/socket.h>
+#include <sys/uio.h>
+
+opcode_db *_db = NULL;
 
 int cli_end(void)
 {
@@ -91,11 +95,73 @@ opcode_db *open_opcode_db(void)
 	return raw_file;
 }
 
+ssize_t writesrv(const char *type, void *buf, size_t len)
+{
+	if (!_db)
+		_db = open_opcode_db();
+
+	return writesrv_r(_db, type, buf, len);
+}
+
+ssize_t writesrv_r(
+	const opcode_db *db,
+	const char *type,
+	void *buf,
+	int len
+)
+{
+	return writefd_r(
+		SRV_FILENO,
+		db,
+		type,
+		buf,
+		len
+	);
+}
+
+ssize_t writefd_r(
+	int fd,
+	const opcode_db *db,
+	const char *type,
+	void *buf,
+	int len
+)
+{
+	if (len < 0)
+		return -1;
+
+	struct srvsh_header hd = {
+		.opcode = get_opcode(db, type),
+		.length = len,
+	};
+	if (hd.opcode < 0)
+		return -1;
+
+	struct iovec inputs[] = {
+		{
+			.iov_base = &hd,
+			.iov_len = sizeof(hd),
+		},
+		{
+			.iov_base = buf,
+			.iov_len = len,
+		},
+	};
+	struct msghdr msg = {
+		.msg_iov = inputs,
+		.msg_iovlen = 2,
+	};
+	return sendmsg(fd, &msg, 0);
+}
+
 void close_opcode_db(opcode_db *db)
 {
+	if (!db)
+		db = _db;
 	/*
 	 * TODO: check if the file is null-terminated
 	 * plaintext in open_opcode_db()
 	 */
-	munmap(db, strlen(db));
+	if (db)
+		munmap(db, strlen(db));
 }
