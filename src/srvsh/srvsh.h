@@ -70,24 +70,9 @@ struct srvsh_header {
  * \brief Writes a message on the SRV_FILENO with the specified type,
  * 	sending the specified buffer with the given length.
  *
- * This function uses a statically-allocated database which can be
- * freed with close_opcode_db(NULL).
- *
- * \sa writesrv_r()
+ * \sa writeop_r()
  */
-ssize_t writesrv(const char *type, void *buf, size_t len);
-
-/**
- * \brief Writes a message on the SRV_FILENO with the specified type,
- * 	sending the specified buffer with the given length.
- *
- */
-ssize_t writesrv_r(
-	const opcode_db *db,
-	const char *type,
-	void *buf,
-	int len
-);
+ssize_t writesrv(int opcode, void *buf, size_t len);
 
 /**
  * \brief Writes a message to the file descriptor given in fd with
@@ -96,8 +81,7 @@ ssize_t writesrv_r(
  */
 ssize_t writeop_r(
 	int fd,
-	const opcode_db *db,
-	const char *type,
+	int opcode,
 	void *buf,
 	int len
 );
@@ -109,8 +93,7 @@ ssize_t writeop_r(
  */
 ssize_t sendmsgop_r(
 	int fd,
-	const opcode_db *db,
-	const char *type,
+	int opcode,
 	void *buf,
 	int len,
 	struct cmsghdr *cmsg,

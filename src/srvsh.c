@@ -12,8 +12,6 @@
 #include <sys/socket.h>
 #include <sys/uio.h>
 
-opcode_db *_db = NULL;
-
 int cli_end(void)
 {
 	static int _cli_end = 0;
@@ -96,42 +94,21 @@ opcode_db *open_opcode_db(void)
 	return raw_file;
 }
 
-ssize_t writesrv(const char *type, void *buf, size_t len)
+ssize_t writesrv(int opcode, void *buf, size_t len)
 {
-	if (!_db)
-		_db = open_opcode_db();
-
-	return writesrv_r(_db, type, buf, len);
-}
-
-ssize_t writesrv_r(
-	const opcode_db *db,
-	const char *type,
-	void *buf,
-	int len
-)
-{
-	return writeop_r(
-		SRV_FILENO,
-		db,
-		type,
-		buf,
-		len
-	);
+	return writeop_r(SRV_FILENO, opcode, buf, len);
 }
 
 ssize_t writeop_r(
 	int fd,
-	const opcode_db *db,
-	const char *type,
+	int opcode,
 	void *buf,
 	int len
 )
 {
 	return sendmsgop_r(
 		fd,
-		db,
-		type,
+		opcode,
 		buf,
 		len,
 		NULL,
@@ -141,8 +118,7 @@ ssize_t writeop_r(
 
 ssize_t sendmsgop_r(
 	int fd,
-	const opcode_db *db,
-	const char *type,
+	int opcode,
 	void *buf,
 	int len,
 	struct cmsghdr *cmsg,
@@ -153,11 +129,9 @@ ssize_t sendmsgop_r(
 		return -1;
 
 	struct srvsh_header hd = {
-		.opcode = get_opcode(db, type),
+		.opcode = opcode,
 		.length = len,
 	};
-	if (hd.opcode < 0)
-		return -1;
 
 	struct iovec inputs[] = {
 		{
@@ -180,8 +154,6 @@ ssize_t sendmsgop_r(
 
 void close_opcode_db(opcode_db *db)
 {
-	if (!db)
-		db = _db;
 	/*
 	 * TODO: check if the file is null-terminated
 	 * plaintext in open_opcode_db()
