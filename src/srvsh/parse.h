@@ -1,5 +1,5 @@
 /*
- * GuiSH - A Shell for Wayland Programs
+ * srvsh - A server/client shell script interpreter
  * Copyright (C) 2025  Marcus Harrison
  * 
  * This program is free software: you can redistribute it and/or modify
