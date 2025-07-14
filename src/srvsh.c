@@ -71,7 +71,7 @@ int get_opcode(const opcode_db *db, const char *name)
 
 opcode_db *open_opcode_db(void)
 {
-	const char *db_path = getenv("SRVSH_DATABASE");
+	const char *db_path = getenv("OPCODE_DATABASE");
 	if (!db_path)
 		return NULL;
 	int fd = open(db_path, O_RDONLY);

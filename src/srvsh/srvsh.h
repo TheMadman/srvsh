@@ -119,9 +119,9 @@ ssize_t sendmsgop_r(
 
 /**
  * \brief Returns a pointer to the opcode database
- * 	defined by the environment variable SRVSH_DATABASE.
+ * 	defined by the environment variable OPCODE_DATABASE.
  *
- * \returns NULL if SRVSH_DATABASE is not set, or the path cannot
+ * \returns NULL if OPCODE_DATABASE is not set, or the path cannot
  * 	be opened for reading. Returns a pointer to the database
  * 	otherwise.
  */
