@@ -4,10 +4,11 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdlib.h>
-#include <sys/mman.h>
 #include <string.h>
 #include <ctype.h>
 #include <limits.h>
+
+#include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/uio.h>
 
@@ -110,7 +111,7 @@ ssize_t writesrv_r(
 	int len
 )
 {
-	return writefd_r(
+	return writeop_r(
 		SRV_FILENO,
 		db,
 		type,
@@ -119,12 +120,33 @@ ssize_t writesrv_r(
 	);
 }
 
-ssize_t writefd_r(
+ssize_t writeop_r(
 	int fd,
 	const opcode_db *db,
 	const char *type,
 	void *buf,
 	int len
+)
+{
+	return sendmsgop_r(
+		fd,
+		db,
+		type,
+		buf,
+		len,
+		NULL,
+		0
+	);
+}
+
+ssize_t sendmsgop_r(
+	int fd,
+	const opcode_db *db,
+	const char *type,
+	void *buf,
+	int len,
+	struct cmsghdr *cmsg,
+	size_t cmsg_len
 )
 {
 	if (len < 0)
@@ -150,6 +172,8 @@ ssize_t writefd_r(
 	struct msghdr msg = {
 		.msg_iov = inputs,
 		.msg_iovlen = 2,
+		.msg_control = cmsg,
+		.msg_controllen = cmsg_len,
 	};
 	return sendmsg(fd, &msg, 0);
 }

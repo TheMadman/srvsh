@@ -21,6 +21,7 @@
 
 #include <stddef.h>
 #include <sys/types.h>
+#include <sys/socket.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -93,12 +94,27 @@ ssize_t writesrv_r(
  * 	the specified type, sending the specified buffer with the
  * 	given length.
  */
-ssize_t writefd_r(
+ssize_t writeop_r(
 	int fd,
 	const opcode_db *db,
 	const char *type,
 	void *buf,
 	int len
+);
+
+/**
+ * \brief Writes a message to the file descriptor given in fd,
+ * 	in the same manner as writefd_r, except it also supports
+ * 	ancillary data.
+ */
+ssize_t sendmsgop_r(
+	int fd,
+	const opcode_db *db,
+	const char *type,
+	void *buf,
+	int len,
+	struct cmsghdr *cmsg,
+	size_t cmsg_len
 );
 
 /**
