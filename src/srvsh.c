@@ -15,8 +15,12 @@
 int cli_end(void)
 {
 	static int _cli_end = 0;
-	if (!_cli_end)
-		_cli_end = atoi(getenv("SRVSH_CLIENTS_END"));
+	if (!_cli_end) {
+		const char *envvar = getenv("SRVSH_CLIENTS_END");
+		if (!envvar)
+			return -1;
+		_cli_end = atoi(envvar);
+	}
 	return _cli_end;
 }
 

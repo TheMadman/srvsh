@@ -55,6 +55,9 @@ typedef void opcode_db;
  *
  * All client file descriptors can be accessed with
  * for(int i = CLI_BEGIN; i < cli_end(); i++).
+ *
+ * If there was an error discovering the end of the clients,
+ * -1 is returned.
  */
 int cli_end(void);
 
