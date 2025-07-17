@@ -22,6 +22,7 @@
 #include <stddef.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <poll.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -62,6 +63,14 @@ typedef void opcode_db;
 int cli_end(void);
 
 /**
+ * \brief Returns a count of how many clients are connected.
+ *
+ * If there was an error discovering the number of clients,
+ * a negative number is returned.
+ */
+int cli_count(void);
+
+/**
  * \brief A header prefix for IPC between servers/clients.
  */
 struct srvsh_header {
@@ -73,7 +82,7 @@ struct srvsh_header {
  * \brief Writes a message on the SRV_FILENO with the specified type,
  * 	sending the specified buffer with the given length.
  *
- * \sa writeop_r()
+ * \sa writeop()
  */
 ssize_t writesrv(int opcode, void *buf, size_t len);
 
@@ -82,7 +91,7 @@ ssize_t writesrv(int opcode, void *buf, size_t len);
  * 	the specified type, sending the specified buffer with the
  * 	given length.
  */
-ssize_t writeop_r(
+ssize_t writeop(
 	int fd,
 	int opcode,
 	void *buf,
@@ -91,10 +100,10 @@ ssize_t writeop_r(
 
 /**
  * \brief Writes a message to the file descriptor given in fd,
- * 	in the same manner as writefd_r, except it also supports
+ * 	in the same manner as writefd, except it also supports
  * 	ancillary data.
  */
-ssize_t sendmsgop_r(
+ssize_t sendmsgop(
 	int fd,
 	int opcode,
 	void *buf,
@@ -117,9 +126,7 @@ opcode_db *open_opcode_db(void);
  * \brief Release an opcode database opened with
  * 	open_opcode_db().
  *
- * \param db A database previously opened with open_opcode_db(),
- * 	or NULL to close the statically-allocated database used by
- * 	writesrv() etc.
+ * \param db A database previously opened with open_opcode_db().
  */
 void close_opcode_db(opcode_db *db);
 
@@ -133,6 +140,38 @@ void close_opcode_db(opcode_db *db);
  * \returns A positive integer on match, or -1 on failure.
  */
 int get_opcode(const opcode_db *db, const char *name);
+
+/**
+ * \brief Initializes an array of struct pollfd for
+ * 	the server and all currently-connected clients.
+ *
+ * The pollfd structs are already initialized for the
+ * POLLIN event for convenience.
+ *
+ * \param buffer The buffer to write the pollfds into.
+ * \param buflen The number of pollfd structs the buffer
+ * 	can hold.
+ *
+ * \returns The number of pollfds initialized, or -1
+ * 	if an error was encountered.
+ */
+int srvcli_polls(struct pollfd *fds, int buflen);
+
+/**
+ * \brief Initializes an array of struct pollfd for
+ * 	all currently-connected clients.
+ *
+ * The pollfd structs are already initialized for the
+ * POLLIN event for convenience.
+ *
+ * \param buffer The buffer to write the pollfds into.
+ * \param buflen The number of pollfd structs the buffer
+ * 	can hold.
+ *
+ * \returns The number of pollfds initialized, or -1
+ * 	if an error was encountered.
+ */
+int cli_polls(struct pollfd *buffer, int buflen);
 
 #ifdef __cplusplus
 } // extern "C"

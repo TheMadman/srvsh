@@ -7,6 +7,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <limits.h>
+#include <poll.h>
 
 #include <sys/mman.h>
 #include <sys/socket.h>
@@ -22,6 +23,11 @@ int cli_end(void)
 		_cli_end = atoi(envvar);
 	}
 	return _cli_end;
+}
+
+int cli_count(void)
+{
+	return cli_end() - CLI_BEGIN;
 }
 
 static const char *next_line(const char *str)
@@ -100,17 +106,17 @@ opcode_db *open_opcode_db(void)
 
 ssize_t writesrv(int opcode, void *buf, size_t len)
 {
-	return writeop_r(SRV_FILENO, opcode, buf, len);
+	return writeop(SRV_FILENO, opcode, buf, len);
 }
 
-ssize_t writeop_r(
+ssize_t writeop(
 	int fd,
 	int opcode,
 	void *buf,
 	int len
 )
 {
-	return sendmsgop_r(
+	return sendmsgop(
 		fd,
 		opcode,
 		buf,
@@ -120,7 +126,7 @@ ssize_t writeop_r(
 	);
 }
 
-ssize_t sendmsgop_r(
+ssize_t sendmsgop(
 	int fd,
 	int opcode,
 	void *buf,
@@ -164,4 +170,39 @@ void close_opcode_db(opcode_db *db)
 	 */
 	if (db)
 		munmap(db, strlen(db));
+}
+
+int srvcli_polls(struct pollfd *fds, int buflen)
+{
+	int count = cli_count() + 1;
+	if (buflen < count)
+		return -1;
+
+	*fds = {
+		.fd = SRV_FILENO,
+		.events = POLLIN,
+	};
+
+	return cli_polls(fds + 1, buflen - 1) + 1;
+}
+
+int cli_polls(struct pollfd *fds, int buflen)
+{
+	int count = cli_count();
+	if (count < 0)
+		return -1;
+
+	if (buflen < count)
+		return -1;
+
+	struct pollfd *current = fds;
+	int end = cli_end();
+	for (int cli = CLI_BEGIN; cli < end; cli++) {
+		*current = (struct pollfd) {
+			.fd = cli,
+			.events = POLLIN,
+		};
+		current++;
+	}
+	return count;
 }
