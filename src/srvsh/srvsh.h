@@ -82,7 +82,7 @@ bool is_client(int fd);
  */
 struct srvsh_header {
 	int opcode;
-	int length;
+	int size;
 };
 
 /**
@@ -120,6 +120,48 @@ ssize_t sendmsgop(
 	int len,
 	void *cmsg,
 	size_t cmsg_len
+);
+
+/**
+ * \brief Polls the server and clients for read events,
+ * 	performing the read and calling the callback with
+ * 	the results.
+ *
+ * For each file descriptor, if there is data to read,
+ * it is read, processed and the callback is called, then
+ * the next file descriptor is processed. If a file descriptor
+ * has no data to read, and returns POLLHUP, POLLERR or
+ * POLLNVAL, processing is stopped and that pollfd struct is
+ * returned. In future calls to pollop(), that file descriptor
+ * will not be processed again.
+ *
+ * \param callback The callback takes the following arguments:
+ * 	- fd - The file descriptor this read comes from
+ * 	- opcode - The opcode sent with the message
+ * 	- buf - A pointer to the (non-header) data
+ * 	- len - The length of the pointed-to data
+ * 	- cmsg - Any ancillary data received
+ * 	- cmsg_len - The length of the cmsg buffer
+ * 	- context - The user-supplied context pointer
+ * \param context A user-supplied context pointer to pass to
+ * 	the callback.
+ * \param timeout The length of time to poll for, as passed to
+ * 	poll(2).
+ *
+ * \return The last processed pollfd.
+ */
+struct pollfd pollop(
+	void (*callback)(
+		int fd,
+		int opcode,
+		void *buf,
+		int len,
+		void *cmsg,
+		size_t cmsg_len,
+		void *context
+	),
+	void *context,
+	int timeout
 );
 
 /**

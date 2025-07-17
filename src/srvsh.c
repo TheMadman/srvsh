@@ -146,7 +146,7 @@ ssize_t sendmsgop(
 
 	struct srvsh_header hd = {
 		.opcode = opcode,
-		.length = len,
+		.size = len,
 	};
 
 	struct iovec inputs[] = {
@@ -211,4 +211,140 @@ int cli_polls(struct pollfd *fds, int buflen)
 		current++;
 	}
 	return count;
+}
+
+struct pollfd pollop(
+	void (*callback)(
+		int fd,
+		int opcode,
+		void *buf,
+		int len,
+		void *cmsg,
+		size_t cmsg_len,
+		void *context
+	),
+	void *context,
+	int timeout
+)
+{
+	static const struct pollfd err = {.fd = -1};
+	static struct pollfd *fds = NULL;
+
+	int total = cli_count() + 1;
+	if (!fds) {
+		fds = calloc(total, sizeof(*fds));
+		if (!fds)
+			return err;
+
+		srvcli_polls(fds, total);
+	}
+
+	int changed = poll(fds, total, timeout);
+
+	if (changed < 0) {
+		return err;
+	}
+
+	// for returning if the loop completes
+	struct pollfd *current = fds;
+	for (; changed > 0 && current < &fds[total]; current++) {
+		if (current->revents & POLLIN) {
+			// TODO: don't like pretty much any of this
+			struct srvsh_header header = { 0 };
+			char cmsg_buf[1024] = { 0 };
+
+			struct iovec buf = {
+				.iov_base = &header,
+				.iov_len = sizeof(header),
+			};
+			struct msghdr hdr = {
+				.msg_iov = &buf,
+				.msg_iovlen = 1,
+				.msg_control = cmsg_buf,
+				.msg_controllen = sizeof(cmsg_buf),
+			};
+
+			ssize_t received = recvmsg(current->fd, &hdr, 0);
+			if (received < 0) {
+				return err;
+			}
+
+			if (received == 0) {
+				// I don't know why this happens but
+				// I don't want my consumers to be as confused
+				// as I am
+				current->revents &= ~POLLIN;
+
+				current->fd = ~current->fd;
+				return (struct pollfd) {
+					.fd = ~current->fd,
+					.events = current->events,
+					.revents = current->revents,
+				};
+			}
+
+			if (header.size == 0) {
+				callback(
+					current->fd,
+					header.opcode,
+					NULL,
+					0,
+					hdr.msg_controllen ? cmsg_buf : NULL,
+					hdr.msg_controllen,
+					context
+				);
+				continue;
+			}
+
+			void *attempt = malloc(header.size);
+			if (!attempt) {
+				return err;
+			}
+
+			struct iovec newbuf = {
+				.iov_base = attempt,
+				.iov_len = header.size,
+			};
+
+			struct msghdr bighdr = {
+				.msg_iov = &newbuf,
+				.msg_iovlen = 1,
+			};
+
+			received = recvmsg(current->fd, &bighdr, 0);
+			if (received < 0) {
+				free(attempt);
+				return err;
+			}
+
+			callback(
+				current->fd,
+				header.opcode,
+				attempt,
+				header.size,
+				hdr.msg_controllen ? cmsg_buf : NULL,
+				hdr.msg_controllen,
+				context
+			);
+
+			free(attempt);
+
+			changed--;
+		} else if (
+			current->revents & POLLHUP
+			|| current->revents & POLLNVAL
+			|| current->revents & POLLERR
+		) {
+			// ignore on future uses
+			current->fd = ~current->fd;
+
+			// return the real FD with issues
+			return (struct pollfd) {
+				.fd = ~current->fd,
+				.events = current->events,
+				.revents = current->revents,
+			};
+		}
+	}
+	return *(current - 1);
 }
