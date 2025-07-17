@@ -30,6 +30,12 @@ int cli_count(void)
 	return cli_end() - CLI_BEGIN;
 }
 
+bool is_client(int fd)
+{
+	return CLI_BEGIN <= fd
+		&& fd < cli_end();
+}
+
 static const char *next_line(const char *str)
 {
 	for (; *str; str++) {

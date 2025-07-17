@@ -23,6 +23,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <poll.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -69,6 +70,12 @@ int cli_end(void);
  * a negative number is returned.
  */
 int cli_count(void);
+
+/**
+ * \returns True if the given file descriptor is a client,
+ * 	false otherwise.
+ */
+bool is_client(int fd);
 
 /**
  * \brief A header prefix for IPC between servers/clients.
