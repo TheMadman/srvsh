@@ -178,7 +178,7 @@ int srvcli_polls(struct pollfd *fds, int buflen)
 	if (buflen < count)
 		return -1;
 
-	*fds = {
+	*fds = (struct pollfd) {
 		.fd = SRV_FILENO,
 		.events = POLLIN,
 	};
