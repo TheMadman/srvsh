@@ -137,7 +137,7 @@ ssize_t sendmsgop(
 	int opcode,
 	void *buf,
 	int len,
-	struct cmsghdr *cmsg,
+	void *cmsg,
 	size_t cmsg_len
 )
 {

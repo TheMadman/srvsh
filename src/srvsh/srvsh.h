@@ -109,13 +109,16 @@ ssize_t writeop(
  * \brief Writes a message to the file descriptor given in fd,
  * 	in the same manner as writefd, except it also supports
  * 	ancillary data.
+ *
+ * See sendmsg(2) and cmsg(3) for information on the cmsg
+ * and cmsg_len parameters.
  */
 ssize_t sendmsgop(
 	int fd,
 	int opcode,
 	void *buf,
 	int len,
-	struct cmsghdr *cmsg,
+	void *cmsg,
 	size_t cmsg_len
 );
 
