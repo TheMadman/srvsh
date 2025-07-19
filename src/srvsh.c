@@ -348,3 +348,36 @@ struct pollfd pollop(
 	}
 	return *(current - 1);
 }
+
+void close_cmsg_fds(void *cmsg, size_t cmsg_len)
+{
+	if (!cmsg)
+		return;
+
+	struct msghdr hdr = {
+		.msg_control = cmsg,
+		.msg_controllen = cmsg_len,
+	};
+
+	struct cmsghdr *chdr = CMSG_FIRSTHDR(&hdr);
+	do {
+		if (
+			chdr->cmsg_level != SOL_SOCKET
+			|| chdr->cmsg_type != SCM_RIGHTS
+		)
+			continue;
+
+		int *fds = malloc(chdr->cmsg_len);
+		if (!fds)
+			return;
+
+		memcpy(fds, CMSG_DATA(chdr), chdr->cmsg_len);
+
+		const size_t arrlength = chdr->cmsg_len / sizeof(int);
+		for (size_t i = 0; i < arrlength; i++) {
+			close(fds[i]);
+		}
+
+		free(fds);
+	} while (chdr = CMSG_NXTHDR(&hdr, chdr));
+}

@@ -165,6 +165,12 @@ struct pollfd pollop(
 );
 
 /**
+ * \brief Convenience function for closing all file descriptors
+ * 	passed in ancillary data.
+ */
+void close_cmsg_fds(void *cmsg, size_t cmsg_len);
+
+/**
  * \brief Returns a pointer to the opcode database
  * 	defined by the environment variable OPCODE_DATABASE.
  *
