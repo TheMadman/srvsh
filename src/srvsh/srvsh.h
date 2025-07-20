@@ -75,7 +75,7 @@ int cli_count(void);
  * \returns True if the given file descriptor is a client,
  * 	false otherwise.
  */
-bool is_client(int fd);
+bool is_cli(int fd);
 
 /**
  * \brief A header prefix for IPC between servers/clients.
@@ -167,6 +167,9 @@ struct pollfd pollop(
 /**
  * \brief Convenience function for closing all file descriptors
  * 	passed in ancillary data.
+ *
+ * \param cmsg The cmsg pointer as passed to the pollop callback.
+ * \param cmsg_len The cmsg_len as passed to the pollop callback.
  */
 void close_cmsg_fds(void *cmsg, size_t cmsg_len);
 

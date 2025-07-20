@@ -30,7 +30,7 @@ int cli_count(void)
 	return cli_end() - CLI_BEGIN;
 }
 
-bool is_client(int fd)
+bool is_cli(int fd)
 {
 	return CLI_BEGIN <= fd
 		&& fd < cli_end();
