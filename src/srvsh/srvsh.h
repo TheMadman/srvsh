@@ -209,12 +209,14 @@ int get_opcode(const opcode_db *db, const char *name);
  * The pollfd structs are already initialized for the
  * POLLIN event for convenience.
  *
- * \param buffer The buffer to write the pollfds into.
+ * \param fds The buffer to write the pollfds into.
  * \param buflen The number of pollfd structs the buffer
  * 	can hold.
  *
  * \returns The number of pollfds initialized, or -1
  * 	if an error was encountered.
+ *
+ * \sa cli_polls
  */
 int srvcli_polls(struct pollfd *fds, int buflen);
 
@@ -231,6 +233,8 @@ int srvcli_polls(struct pollfd *fds, int buflen);
  *
  * \returns The number of pollfds initialized, or -1
  * 	if an error was encountered.
+ *
+ * \sa srvcli_polls
  */
 int cli_polls(struct pollfd *buffer, int buflen);
 
