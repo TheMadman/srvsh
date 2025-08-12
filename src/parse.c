@@ -113,10 +113,11 @@ static token_t parse_statement_impl(
 	int count
 )
 {
+	static const token_t resource_error = { 0 };
 	token = token_next(token);
 
 	if (token.type == lex_unexpected) {
-		return (token_t){ 0 };
+		return resource_error;
 	} else if (token.type == lex_word_separator) {
 		return parse_statement_impl(
 			token,
@@ -129,9 +130,11 @@ static token_t parse_statement_impl(
 			(lptr_t){ 0 }
 		);
 		if (size < 0)
-			return (token_t){ 0 };
+			return resource_error;
 
-		token_t result = { 0 };
+		// if the LPTR_WITH() below fails to alloc, the context
+		// won't run so we want to return an error in that case
+		token_t result = resource_error;
 		LPTR_WITH(word, (size_t)size + 1, sizeof(char)) {
 			scallop_lang_lex_normalize_word(
 				token.value,
@@ -163,12 +166,12 @@ static token_t parse_statement_impl(
 		 */
 		int sockets[2] = { 0 };
 		if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) < 0)
-			return (token_t){ 0 };
+			return resource_error;
 		switch (fork()) {
 			case -1:
 				close(sockets[0]);
 				close(sockets[1]);
-				return (token_t){ 0 };
+				return resource_error;
 			case 0:
 				for (int i = sockets[0]; i > SRV_FILENO; i--)
 					close(i);
@@ -232,6 +235,7 @@ static token_t parse_statement_impl(
 				close(sockets[1]);
 				token = skip_context(token);
 				if (token.type != lex_curly_block_end) {
+					// TODO: send signal to shutdown children?
 					token.type = lex_unexpected;
 					return token;
 				}
@@ -240,12 +244,12 @@ static token_t parse_statement_impl(
 	} else /* if (token.type == lex_statement_separator) and friends */ {
 		int sockets[2] = { 0 };
 		if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) < 0)
-			return (token_t){ 0 };
+			return resource_error;
 		switch (fork()) {
 			case -1:
 				close(sockets[0]);
 				close(sockets[1]);
-				return (token_t){ 0 };
+				return resource_error;
 			case 0:
 				for (int i = sockets[0]; i > SRV_FILENO; i--)
 					close(i);

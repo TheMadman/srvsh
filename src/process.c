@@ -15,9 +15,6 @@
 #define arrlength libadt_util_arrlength
 #define arrend libadt_util_arrend
 
-// temp gettext wrapper
-#define _(str) str
-
 typedef struct libadt_const_lptr clptr;
 
 int exec_command(clptr statement)
