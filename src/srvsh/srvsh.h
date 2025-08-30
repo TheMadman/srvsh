@@ -91,7 +91,7 @@ struct srvsh_header {
  *
  * \sa writeop()
  */
-ssize_t writesrv(int opcode, void *buf, size_t len);
+ssize_t writesrv(int opcode, const void *buf, size_t len);
 
 /**
  * \brief Writes a message to the file descriptor given in fd with
@@ -101,7 +101,7 @@ ssize_t writesrv(int opcode, void *buf, size_t len);
 ssize_t writeop(
 	int fd,
 	int opcode,
-	void *buf,
+	const void *buf,
 	int len
 );
 
@@ -116,7 +116,7 @@ ssize_t writeop(
 ssize_t sendmsgop(
 	int fd,
 	int opcode,
-	void *buf,
+	const void *buf,
 	int len,
 	void *cmsg,
 	size_t cmsg_len

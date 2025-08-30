@@ -110,7 +110,7 @@ opcode_db *open_opcode_db(void)
 	return raw_file;
 }
 
-ssize_t writesrv(int opcode, void *buf, size_t len)
+ssize_t writesrv(int opcode, const void *buf, size_t len)
 {
 	return writeop(SRV_FILENO, opcode, buf, len);
 }
@@ -118,7 +118,7 @@ ssize_t writesrv(int opcode, void *buf, size_t len)
 ssize_t writeop(
 	int fd,
 	int opcode,
-	void *buf,
+	const void *buf,
 	int len
 )
 {
@@ -135,7 +135,7 @@ ssize_t writeop(
 ssize_t sendmsgop(
 	int fd,
 	int opcode,
-	void *buf,
+	const void *buf,
 	int len,
 	void *cmsg,
 	size_t cmsg_len
@@ -155,7 +155,7 @@ ssize_t sendmsgop(
 			.iov_len = sizeof(hd),
 		},
 		{
-			.iov_base = buf,
+			.iov_base = (void*)buf,
 			.iov_len = len,
 		},
 	};
