@@ -8,10 +8,14 @@
 #include <ctype.h>
 #include <limits.h>
 #include <poll.h>
+#include <stdarg.h>
 
 #include <sys/mman.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <sys/uio.h>
+
+extern char **environ;
 
 int cli_end(void)
 {
@@ -19,8 +23,9 @@ int cli_end(void)
 	if (!_cli_end) {
 		const char *envvar = getenv("SRVSH_CLIENTS_END");
 		if (!envvar)
-			return -1;
-		_cli_end = atoi(envvar);
+			_cli_end = CLI_BEGIN;
+		else
+			_cli_end = atoi(envvar);
 	}
 	return _cli_end;
 }
@@ -380,4 +385,93 @@ void close_cmsg_fds(void *cmsg, size_t cmsg_len)
 
 		free(fds);
 	} while (chdr = CMSG_NXTHDR(&hdr, chdr));
+}
+
+static struct clistate execl_impl(
+	bool has_envp,
+	const char *path,
+	va_list args
+)
+{
+	va_list
+		args_for_length = { 0 };
+	int arglength = 0;
+
+	va_copy(args_for_length, args);
+	const char *arg = NULL;
+
+	while ((arg = va_arg(args_for_length, const char*)))
+		arglength++;
+
+	// +1 for the null terminator
+	char **argv = calloc(arglength + 1, sizeof(char**));
+	for (char **cur = argv; arglength; cur++, arglength--)
+		*cur = va_arg(args, char*);
+
+	// skip the null arg
+	va_arg(args, const char*);
+
+	char *const *envp = has_envp ?
+		va_arg(args, char**) :
+		environ;
+
+	struct clistate result = cliexecve(path, argv, envp);
+
+	// could use a context-manager-like interface here but
+	// this function is (currently) tiny
+	free(argv);
+	va_end(args_for_length);
+
+	return result;
+}
+
+struct clistate cliexecl(const char *path, const char *arg0, ...)
+{
+	va_list args = { 0 };
+	va_start(args, arg0);
+	struct clistate result = execl_impl(false, path, args);
+	va_end(args);
+	return result;
+}
+
+struct clistate cliexecle(const char *path, const char *arg0, ...)
+{
+	va_list args = { 0 };
+	struct clistate result = execl_impl(true, path, args);
+	va_end(args);
+	return result;
+}
+
+struct clistate cliexecv(const char *path, char *const argv[])
+{
+	return cliexecve(path, argv, environ);
+}
+
+struct clistate cliexecve(const char *path, char *const argv[], char *const envp[])
+{
+	static const struct clistate error = { -1, -1 };
+	struct clistate result = error;
+
+	int sockets[2] = { -1, -1 };
+	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) < 0)
+		return error;
+
+	result.pid = fork();
+	switch(result.pid) {
+		case -1:
+			return error;
+
+		case 0:
+			for (int sock = sockets[0]; sock > SRV_FILENO; sock--)
+				close(sock);
+			if (dup2(sockets[1], SRV_FILENO) < 0)
+				exit(1);
+			close(sockets[1]);
+			execve(path, argv, envp);
+			exit(1);
+		default:
+			close(sockets[1]);
+			result.socket = sockets[0];
+			return result;
+	}
 }

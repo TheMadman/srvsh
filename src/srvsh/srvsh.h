@@ -58,8 +58,11 @@ typedef void opcode_db;
  * All client file descriptors can be accessed with
  * for(int i = CLI_BEGIN; i < cli_end(); i++).
  *
- * If there was an error discovering the end of the clients,
- * -1 is returned.
+ * If there are no clients, CLI_BEGIN is returned.
+ *
+ * Note that this function does not consider new clients spawned
+ * with the cliexec*() functions, only those spawned before
+ * the program started.
  */
 int cli_end(void);
 
@@ -237,6 +240,98 @@ int srvcli_polls(struct pollfd *fds, int buflen);
  * \sa srvcli_polls
  */
 int cli_polls(struct pollfd *buffer, int buflen);
+
+struct clistate {
+	int socket;
+	int pid;
+};
+
+/**
+ * \brief Forks and executes the given command as a new client.
+ *
+ * Example usage:
+ *
+ * \code
+ * struct clistate client = cliexec(
+ * 	"/usr/bin/ls",
+ * 	"/usr/bin/ls",
+ * 	"-a",
+ * 	"/etc",
+ * 	NULL
+ * );
+ * // use client.socket to read/write to the client, and
+ * // client.pid to get the client's process ID
+ * \endcode
+ *
+ * \param command The path to an executable.
+ * \param arg0 Arguments to pass to the command. Traditionally,
+ * 	the arg0 argument is the same as path. Must be terminated
+ * 	with a null terminator.
+ *
+ * \returns A new client socket and process ID for the
+ * 	client.
+ */
+struct clistate cliexecl(const char *path, const char *arg0, ...);
+
+/**
+ * \brief Forks and executes the given command as a new client.
+ *
+ * Example usage:
+ *
+ * \code
+ * char *const envp[] = {
+ * 	"PATH=/usr/bin",
+ * 	NULL,
+ * };
+ * struct clistate client = cliexec(
+ * 	"/usr/bin/ls",
+ * 	"/usr/bin/ls",
+ * 	"-a",
+ * 	"/etc",
+ * 	NULL,
+ * 	envp
+ * );
+ * // use client.socket to read/write to the client, and
+ * // client.pid to get the client's process ID
+ * \endcode
+ *
+ * \param command The path to an executable.
+ * \param arg0 Arguments to pass to the command. Traditionally,
+ * 	the arg0 argument is the same as path. Must be terminated
+ * 	with a null terminator.
+ *
+ * \returns A new client socket and process ID for the
+ * 	client.
+ */
+struct clistate cliexecle(const char *path, const char *arg0, ...);
+
+/**
+ * \brief Forks and executes the given command as a new client.
+ *
+ * Example usage:
+ *
+ * \code
+ * const char *argv[] = {
+ * 	"/usr/bin/ls",
+ * 	"-a",
+ * 	"/etc",
+ * 	NULL,
+ * };
+ * struct clistate client = cliexec(argv[0], argv);
+ * // use client.socket to read/write to the client, and
+ * // client.pid to get the client's process ID
+ * \endcode
+ *
+ * \param command The path to an executable.
+ * \param argv Arguments to pass to the command. Traditionally,
+ * 	the first argument is the same as path.
+ *
+ * \returns A new client socket and process ID for the
+ * 	client.
+ */
+struct clistate cliexecv(const char *path, char *const argv[]);
+
+struct clistate cliexecve(const char *path, char *const argv[], char *const envp[]);
 
 #ifdef __cplusplus
 } // extern "C"
