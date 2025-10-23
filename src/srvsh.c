@@ -224,8 +224,7 @@ struct pollfd pollop(
 		int opcode,
 		void *buf,
 		int len,
-		void *cmsg,
-		size_t cmsg_len,
+		struct msghdr header,
 		void *context
 	),
 	void *context,
@@ -294,8 +293,7 @@ struct pollfd pollop(
 					header.opcode,
 					NULL,
 					0,
-					hdr.msg_controllen ? cmsg_buf : NULL,
-					hdr.msg_controllen,
+					hdr,
 					context
 				);
 				continue;
@@ -327,8 +325,7 @@ struct pollfd pollop(
 				header.opcode,
 				attempt,
 				header.size,
-				hdr.msg_controllen ? cmsg_buf : NULL,
-				hdr.msg_controllen,
+				hdr,
 				context
 			);
 

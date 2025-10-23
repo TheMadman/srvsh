@@ -121,7 +121,7 @@ void test_sendmsgop(void)
 		struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msghdr);
 		assert(cmsg);
 		assert(cmsg->cmsg_type == SCM_RIGHTS);
-		assert(cmsg->cmsg_len = CMSG_LEN(sizeof(int)));
+		assert(cmsg->cmsg_len == CMSG_LEN(sizeof(int)));
 
 		int new_fd = -1;
 		memcpy(&new_fd, CMSG_DATA(cmsg), sizeof(int));
@@ -138,8 +138,7 @@ void test_pollop_callback(
 	int opcode,
 	void *data,
 	int size,
-	void *cmsg,
-	size_t cmsg_len,
+	struct msghdr header,
 	void *context
 )
 {
@@ -149,10 +148,6 @@ void test_pollop_callback(
 	assert(size == sizeof(int));
 	assert(*(int*)data == 6);
 
-	// cmsg is a PITA to work with
-	// TODO: actually test cmsg data
-	assert(cmsg == NULL);
-	assert(cmsg_len == 0);
 	assert(context == &client);
 }
 

@@ -143,8 +143,7 @@ ssize_t sendmsgop(
  * 	- opcode - The opcode sent with the message
  * 	- buf - A pointer to the (non-header) data
  * 	- len - The length of the pointed-to data
- * 	- cmsg - Any ancillary data received
- * 	- cmsg_len - The length of the cmsg buffer
+ * 	- header - The msghdr struct, including auxillary data
  * 	- context - The user-supplied context pointer
  * \param context A user-supplied context pointer to pass to
  * 	the callback.
@@ -159,8 +158,7 @@ struct pollfd pollop(
 		int opcode,
 		void *buf,
 		int len,
-		void *cmsg,
-		size_t cmsg_len,
+		struct msghdr header,
 		void *context
 	),
 	void *context,
