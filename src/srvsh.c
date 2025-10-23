@@ -351,17 +351,12 @@ struct pollfd pollop(
 	return *(current - 1);
 }
 
-void close_cmsg_fds(void *cmsg, size_t cmsg_len)
+void close_cmsg_fds(struct msghdr header)
 {
-	if (!cmsg)
+	if (!header.msg_control)
 		return;
 
-	struct msghdr hdr = {
-		.msg_control = cmsg,
-		.msg_controllen = cmsg_len,
-	};
-
-	struct cmsghdr *chdr = CMSG_FIRSTHDR(&hdr);
+	struct cmsghdr *chdr = CMSG_FIRSTHDR(&header);
 	do {
 		if (
 			chdr->cmsg_level != SOL_SOCKET
@@ -381,7 +376,7 @@ void close_cmsg_fds(void *cmsg, size_t cmsg_len)
 		}
 
 		free(fds);
-	} while (chdr = CMSG_NXTHDR(&hdr, chdr));
+	} while ((chdr = CMSG_NXTHDR(&header, chdr)));
 }
 
 static struct clistate execl_impl(
@@ -390,8 +385,7 @@ static struct clistate execl_impl(
 	va_list args
 )
 {
-	va_list
-		args_for_length = { 0 };
+	va_list args_for_length = { 0 };
 	int arglength = 0;
 
 	va_copy(args_for_length, args);
@@ -434,6 +428,7 @@ struct clistate cliexecl(const char *path, const char *arg0, ...)
 struct clistate cliexecle(const char *path, const char *arg0, ...)
 {
 	va_list args = { 0 };
+	va_start(args, arg0);
 	struct clistate result = execl_impl(true, path, args);
 	va_end(args);
 	return result;

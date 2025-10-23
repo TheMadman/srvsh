@@ -168,11 +168,8 @@ struct pollfd pollop(
 /**
  * \brief Convenience function for closing all file descriptors
  * 	passed in ancillary data.
- *
- * \param cmsg The cmsg pointer as passed to the pollop callback.
- * \param cmsg_len The cmsg_len as passed to the pollop callback.
  */
-void close_cmsg_fds(void *cmsg, size_t cmsg_len);
+void close_cmsg_fds(struct msghdr header);
 
 /**
  * \brief Returns a pointer to the opcode database
