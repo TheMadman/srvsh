@@ -71,6 +71,13 @@ int get_opcode(const opcode_db *db, const char *name)
 			continue;
 
 		const char *value_start = skip_spaces(&line[len]);
+		const bool common_prefix = value_start == &line[len];
+		if (common_prefix) {
+			// The message name is a prefix for another
+			// opcode, skip 'till end of line
+			continue;
+		}
+
 		char *value_end = NULL;
 
 		long attempt = strtol(value_start, &value_end, 10);
