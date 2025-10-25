@@ -257,11 +257,7 @@ struct pollfd pollop(
 	}
 
 	struct pollfd *current = fds;
-	while(changed > 0 && current < &fds[total]) {
-		// makes the return statement at the end less confusing
-		// than using a for-loop
-		current++;
-
+	for (; changed > 0 && current < &fds[total]; current++) {
 		if (current->revents & POLLIN) {
 			// TODO: don't like pretty much any of this
 			struct srvsh_header header = { 0 };
@@ -358,7 +354,7 @@ struct pollfd pollop(
 			};
 		}
 	}
-	return *current;
+	return *(current - 1);
 }
 
 void close_cmsg_fds(struct msghdr header)
