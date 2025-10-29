@@ -154,9 +154,31 @@ void test_pollop_callback(
 
 void test_pollop(void)
 {
+	callback_run = false;
 	int data = 6;
 	writesrv(5, &data, sizeof(data));
 	pollop(test_pollop_callback, &client, -1);
+	assert(callback_run == true);
+}
+
+void test_pollopfd(void)
+{
+	callback_run = false;
+	int data = 6;
+	writesrv(5, &data, sizeof(data));
+	struct pollfd fd = {.fd = client};
+	pollopfd(fd, test_pollop_callback, &client, -1);
+	assert(callback_run == true);
+}
+
+void test_pollopfds(void)
+{
+	// TODO: test >1 pollfd
+	callback_run = false;
+	int data = 6;
+	writesrv(5, &data, sizeof(data));
+	struct pollfd fd = {.fd = client};
+	pollopfds(&fd, 1, test_pollop_callback, &client, -1);
 	assert(callback_run == true);
 }
 
@@ -175,13 +197,13 @@ int main()
 	// Don't know what ctest is trying to do, but I'm trying
 	// to test so I don't care
 	if (sockets[0] != server) {
-		if (dup2(sockets[0], SRV_FILENO) < 0)
+		if (dup2(sockets[0], server) < 0)
 			return 1;
 		close(sockets[0]);
 	}
 
 	if (sockets[1] != client) {
-		if (dup2(sockets[1], 4) < 0)
+		if (dup2(sockets[1], client) < 0)
 			return 1;
 		close(sockets[1]);
 	}
@@ -192,4 +214,6 @@ int main()
 	test_writeop();
 	test_sendmsgop();
 	test_pollop();
+	test_pollopfd();
+	test_pollopfds();
 }

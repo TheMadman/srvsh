@@ -126,6 +126,126 @@ ssize_t sendmsgop(
 );
 
 /**
+ * \brief A type defining the callback type
+ * 	used by pollop* functions.
+ *
+ * The callback takes the following arguments:
+ * 	- fd - The file descriptor this read comes from
+ * 	- opcode - The opcode sent with the message
+ * 	- buf - A pointer to the (non-header) data
+ * 	- len - The length of the pointed-to data
+ * 	- header - The msghdr struct, including auxillary data
+ * 	- context - The user-supplied context pointer
+ */
+typedef void pollop_callback(
+	int fd,
+	int opcode,
+	void *buf,
+	int len,
+	struct msghdr header,
+	void *context
+);
+
+/**
+ * \brief Polls the given file descriptor for read events,
+ * 	performing the read and calling the callback with
+ * 	the results.
+ *
+ * The events field of the pollfd is overwritten with POLLIN. Setting
+ * the events field has no effect.
+ *
+ * If there is no data to read, because of an error, a timeout or a
+ * hang-up, the callback isn't called.
+ *
+ * \param fd The file descriptor to listen for events on.
+ * \param callback The callback to call for read events.
+ * \param context A context pointer to pass to the callback.
+ * \param timeout The maximum amount of time to block on
+ * 	the file descriptor.
+ *
+ * \returns
+ * 	If a read, hang-up or file descriptor error occurred,
+ * 	the pollfd representing the passed file descriptor is returned.
+ *
+ *	If a poll error occurred, a pollfd containing a -1 file
+ *	descriptor is returned.
+ *
+ * 	If the timeout was reached with no events, a pollfd containing
+ * 	zeroes is returned.
+ */
+struct pollfd pollopfd(
+	struct pollfd fd,
+	pollop_callback *callback,
+	void *context,
+	int timeout
+);
+
+/**
+ * \brief Polls the given file descriptors for read events,
+ * 	performing the read and calling the callback with
+ * 	the results.
+ *
+ * The events field of the pollfd is overwritten with POLLIN. Setting
+ * the events field has no effect.
+ *
+ * If there is no data to read, because of an error, a timeout or a
+ * hang-up, the callback isn't called.
+ *
+ * \param fds A pointer to the first of an array of file descriptors.
+ * \param count The number of file descriptors in the array.
+ * \param callback The callback to call for read events.
+ * \param context A context pointer to pass to the callback.
+ * \param timeout The maximum amount of time to block on
+ * 	the file descriptor.
+ *
+ * \returns
+ * 	If a read, hang-up or file descriptor error occurred,
+ * 	the last processed file descriptor is returned.
+ *
+ *	If a poll error occurred, a pollfd containing a -1 file
+ *	descriptor is returned.
+ *
+ * 	If the timeout was reached with no events, a pollfd containing
+ * 	zeroes is returned.
+ */
+struct pollfd pollopfds(
+	struct pollfd *fds,
+	int count,
+	pollop_callback *callback,
+	void *context,
+	int timeout
+);
+
+/**
+ * \brief Polls the server for read events,
+ * 	performing the read and calling the callback with
+ * 	the results.
+ *
+ * If there is no data to read, because of an error or a
+ * hang-up, the callback isn't called.
+ *
+ * \param callback The callback to call for read events.
+ * \param context A context pointer to pass to the callback.
+ * \param timeout The maximum amount of time to block on
+ * 	the file descriptor.
+ *
+ * \returns
+ * 	If a read, hang-up or file descriptor error occurred,
+ * 	the pollfd representing the server file descriptor is returned.
+ *
+ *	If a poll error occurred, a pollfd containing a -1 file
+ *	descriptor is returned.
+ *
+ * 	If the timeout was reached with no events, a pollfd containing
+ * 	zeroes is returned.
+ */
+struct pollfd pollopsrv(
+	pollop_callback *callback,
+	void *context,
+	int timeout
+);
+
+/**
  * \brief Polls the server and clients for read events,
  * 	performing the read and calling the callback with
  * 	the results.
@@ -138,29 +258,24 @@ ssize_t sendmsgop(
  * returned. In future calls to pollop(), that file descriptor
  * will not be processed again.
  *
- * \param callback The callback takes the following arguments:
- * 	- fd - The file descriptor this read comes from
- * 	- opcode - The opcode sent with the message
- * 	- buf - A pointer to the (non-header) data
- * 	- len - The length of the pointed-to data
- * 	- header - The msghdr struct, including auxillary data
- * 	- context - The user-supplied context pointer
+ * \param callback A callback called on each polled file descriptor.
  * \param context A user-supplied context pointer to pass to
  * 	the callback.
  * \param timeout The length of time to poll for, as passed to
  * 	poll(2).
  *
- * \return The last processed pollfd.
+ * \returns
+ * 	If a read, hang-up or file descriptor error occurred,
+ * 	the last processed file descriptor is returned.
+ *
+ *	If a poll error occurred, a pollfd containing a -1 file
+ *	descriptor is returned.
+ *
+ * 	If the timeout was reached with no events, a pollfd containing
+ * 	zeroes is returned.
  */
 struct pollfd pollop(
-	void (*callback)(
-		int fd,
-		int opcode,
-		void *buf,
-		int len,
-		struct msghdr header,
-		void *context
-	),
+	pollop_callback *callback,
 	void *context,
 	int timeout
 );

@@ -225,15 +225,158 @@ int cli_polls(struct pollfd *fds, int buflen)
 	return count;
 }
 
+/*
+ * Common poll code between different pollop functions
+ *
+ * I really don't like this function but the recvmsg interface
+ * kinda forces my hand here
+ */
+static int process_pollfd(struct pollfd *fd, pollop_callback *callback, void *context)
+{
+	static const int
+		no_work = 1,
+		successful_read = 0,
+		hangup = -1,
+		err = -2;
+	if (fd->revents & POLLIN) {
+		// TODO: don't like pretty much any of this
+		struct srvsh_header header = { 0 };
+		char cmsg_buf[1024] = { 0 };
+
+		struct iovec buf = {
+			.iov_base = &header,
+			.iov_len = sizeof(header),
+		};
+		struct msghdr hdr = {
+			.msg_iov = &buf,
+			.msg_iovlen = 1,
+			.msg_control = cmsg_buf,
+			.msg_controllen = sizeof(cmsg_buf),
+		};
+
+		ssize_t received = recvmsg(fd->fd, &hdr, 0);
+		if (received < 0) {
+			return err;
+		}
+
+		if (received == 0) {
+			return hangup;
+		}
+
+		if (header.size == 0) {
+			callback(
+				fd->fd,
+				header.opcode,
+				NULL,
+				0,
+				hdr,
+				context
+			);
+			return successful_read;
+		}
+
+		void *attempt = malloc(header.size);
+		if (!attempt) {
+			return err;
+		}
+
+		struct iovec newbuf = {
+			.iov_base = attempt,
+			.iov_len = header.size,
+		};
+
+		struct msghdr bighdr = {
+			.msg_iov = &newbuf,
+			.msg_iovlen = 1,
+		};
+
+		received = recvmsg(fd->fd, &bighdr, 0);
+		if (received < 0) {
+			free(attempt);
+			return err;
+		}
+
+		callback(
+			fd->fd,
+			header.opcode,
+			attempt,
+			header.size,
+			hdr,
+			context
+		);
+
+		free(attempt);
+
+		return successful_read;
+	} else if (
+		fd->revents & POLLHUP
+		|| fd->revents & POLLNVAL
+		|| fd->revents & POLLERR
+	) {
+		return err;
+	}
+	return no_work;
+}
+
+struct pollfd pollopfds(
+	struct pollfd *fds,
+	int count,
+	pollop_callback *callback,
+	void *context,
+	int timeout
+)
+{
+	static const struct pollfd err = {.fd = -1};
+
+	fds->events = POLLIN;
+
+	if (count < 0)
+		return err;
+
+	int changed = poll(fds, count, timeout);
+
+	if (changed < 0)
+		return err;
+
+	if (changed == 0)
+		return (struct pollfd) { 0 };
+
+	struct pollfd *fd;
+	for (fd = fds; changed > 0 && fd < &fds[count]; fd++) {
+		int result = process_pollfd(fd, callback, context);
+		if (result == -2)
+			return err;
+		else if (result == -1)
+			return *fd;
+		else if (result == 0)
+			changed++;
+	}
+
+	return *(fd - 1);
+}
+
+struct pollfd pollopfd(
+	struct pollfd fd,
+	pollop_callback *callback,
+	void *context,
+	int timeout
+)
+{
+	return pollopfds(&fd, 1, callback, context, timeout);
+}
+
+struct pollfd pollopsrv(
+	pollop_callback *callback,
+	void *context,
+	int timeout
+)
+{
+	struct pollfd fd = {.fd = SRV_FILENO};
+	return pollopfd(fd, callback, context, timeout);
+}
+
 struct pollfd pollop(
-	void (*callback)(
-		int fd,
-		int opcode,
-		void *buf,
-		int len,
-		struct msghdr header,
-		void *context
-	),
+	pollop_callback *callback,
 	void *context,
 	int timeout
 )
@@ -250,111 +393,7 @@ struct pollfd pollop(
 		srvcli_polls(fds, total);
 	}
 
-	int changed = poll(fds, total, timeout);
-
-	if (changed < 0) {
-		return err;
-	}
-
-	struct pollfd *current = fds;
-	for (; changed > 0 && current < &fds[total]; current++) {
-		if (current->revents & POLLIN) {
-			// TODO: don't like pretty much any of this
-			struct srvsh_header header = { 0 };
-			char cmsg_buf[1024] = { 0 };
-
-			struct iovec buf = {
-				.iov_base = &header,
-				.iov_len = sizeof(header),
-			};
-			struct msghdr hdr = {
-				.msg_iov = &buf,
-				.msg_iovlen = 1,
-				.msg_control = cmsg_buf,
-				.msg_controllen = sizeof(cmsg_buf),
-			};
-
-			ssize_t received = recvmsg(current->fd, &hdr, 0);
-			if (received < 0) {
-				return err;
-			}
-
-			if (received == 0) {
-				// I don't know why this happens but
-				// I don't want my consumers to be as confused
-				// as I am
-				current->revents &= ~POLLIN;
-
-				current->fd = ~current->fd;
-				return (struct pollfd) {
-					.fd = ~current->fd,
-					.events = current->events,
-					.revents = current->revents,
-				};
-			}
-
-			if (header.size == 0) {
-				callback(
-					current->fd,
-					header.opcode,
-					NULL,
-					0,
-					hdr,
-					context
-				);
-				continue;
-			}
-
-			void *attempt = malloc(header.size);
-			if (!attempt) {
-				return err;
-			}
-
-			struct iovec newbuf = {
-				.iov_base = attempt,
-				.iov_len = header.size,
-			};
-
-			struct msghdr bighdr = {
-				.msg_iov = &newbuf,
-				.msg_iovlen = 1,
-			};
-
-			received = recvmsg(current->fd, &bighdr, 0);
-			if (received < 0) {
-				free(attempt);
-				return err;
-			}
-
-			callback(
-				current->fd,
-				header.opcode,
-				attempt,
-				header.size,
-				hdr,
-				context
-			);
-
-			free(attempt);
-
-			changed--;
-		} else if (
-			current->revents & POLLHUP
-			|| current->revents & POLLNVAL
-			|| current->revents & POLLERR
-		) {
-			// ignore on future uses
-			current->fd = ~current->fd;
-
-			// return the real FD with issues
-			return (struct pollfd) {
-				.fd = ~current->fd,
-				.events = current->events,
-				.revents = current->revents,
-			};
-		}
-	}
-	return *(current - 1);
+	return pollopfds(fds, total, callback, context, timeout);
 }
 
 void close_cmsg_fds(struct msghdr header)
