@@ -17,6 +17,13 @@
 
 extern char **environ;
 
+typedef enum {
+	NO_WORK,
+	SUCCESSFUL_READ,
+	HANGUP,
+	ERROR,
+} pollfd_read_t;
+
 int cli_end(void)
 {
 	static int _cli_end = 0;
@@ -231,13 +238,8 @@ int cli_polls(struct pollfd *fds, int buflen)
  * I really don't like this function but the recvmsg interface
  * kinda forces my hand here
  */
-static int process_pollfd(struct pollfd *fd, pollop_callback *callback, void *context)
+static pollfd_read_t process_pollfd(struct pollfd *fd, pollop_callback *callback, void *context)
 {
-	static const int
-		no_work = 1,
-		successful_read = 0,
-		hangup = -1,
-		err = -2;
 	if (fd->revents & POLLIN) {
 		// TODO: don't like pretty much any of this
 		struct srvsh_header header = { 0 };
@@ -256,11 +258,11 @@ static int process_pollfd(struct pollfd *fd, pollop_callback *callback, void *co
 
 		ssize_t received = recvmsg(fd->fd, &hdr, 0);
 		if (received < 0) {
-			return err;
+			return ERROR;
 		}
 
 		if (received == 0) {
-			return hangup;
+			return HANGUP;
 		}
 
 		if (header.size == 0) {
@@ -272,12 +274,12 @@ static int process_pollfd(struct pollfd *fd, pollop_callback *callback, void *co
 				hdr,
 				context
 			);
-			return successful_read;
+			return SUCCESSFUL_READ;
 		}
 
 		void *attempt = malloc(header.size);
 		if (!attempt) {
-			return err;
+			return ERROR;
 		}
 
 		struct iovec newbuf = {
@@ -293,7 +295,7 @@ static int process_pollfd(struct pollfd *fd, pollop_callback *callback, void *co
 		received = recvmsg(fd->fd, &bighdr, 0);
 		if (received < 0) {
 			free(attempt);
-			return err;
+			return ERROR;
 		}
 
 		callback(
@@ -307,15 +309,15 @@ static int process_pollfd(struct pollfd *fd, pollop_callback *callback, void *co
 
 		free(attempt);
 
-		return successful_read;
+		return SUCCESSFUL_READ;
 	} else if (
 		fd->revents & POLLHUP
 		|| fd->revents & POLLNVAL
 		|| fd->revents & POLLERR
 	) {
-		return err;
+		return ERROR;
 	}
-	return no_work;
+	return NO_WORK;
 }
 
 struct pollfd pollopfds(
@@ -343,12 +345,12 @@ struct pollfd pollopfds(
 
 	struct pollfd *fd;
 	for (fd = fds; changed > 0 && fd < &fds[count]; fd++) {
-		int result = process_pollfd(fd, callback, context);
-		if (result == -2)
+		pollfd_read_t result = process_pollfd(fd, callback, context);
+		if (result == ERROR)
 			return err;
-		else if (result == -1)
+		else if (result == HANGUP)
 			return *fd;
-		else if (result == 0)
+		else if (result == SUCCESSFUL_READ)
 			changed--;
 	}
 
