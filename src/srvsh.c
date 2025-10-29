@@ -349,7 +349,7 @@ struct pollfd pollopfds(
 		else if (result == -1)
 			return *fd;
 		else if (result == 0)
-			changed++;
+			changed--;
 	}
 
 	return *(fd - 1);
