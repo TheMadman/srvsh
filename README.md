@@ -61,4 +61,40 @@ server {
 
 The library provides the interface defined in [srvsh.h](src/srvsh/srvsh.h).
 
-More documentation Coming Soon™.
+## Using libsrvsh To Write Programs
+
+The `libsrvsh` library provides interfaces for conveniently writing and polling clients and servers. These are not mandatory; the raw interface will be documented later.
+
+The interface that `libsrvsh` provides is based around a very primitive binary protocol header, containing an integer "opcode" and an integer length. It also provides an interface for loading an "opcode database", allowing you to use meaningful string names for opcodes. The opcode database is a plain-text file containing records on newlines, with a name and a value separated by whitespace:
+
+```
+# Lines beginning with a # are comment lines and are ignored
+my_message_name   1
+my_other_message  2
+another_name      3
+# etc.
+```
+
+The path to this file can be set with the environment variable `OPCODE_DATABASE`. Writing applications which use the opcode database is simple:
+
+```c
+#include <srvsh.h>
+
+int my_message_name = -1;
+
+int main()
+{
+    opcode_db *db = open_opcode_db();
+    if (!db)
+        return 1;
+
+    my_message_name = get_opcode(db, "my_message_name");
+    if (my_message_name < 0)
+        return 1;
+
+    // use my_message_name variable in writeop*/sendop*/pollop* calls
+    close_opcode_db(db);
+
+    return 0;
+}
+```
