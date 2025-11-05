@@ -92,8 +92,10 @@ int main()
     if (my_message_name < 0)
         return 1;
 
-    // use my_message_name variable in writeop*/sendop*/pollop* calls
+    // close the database when finished loading
     close_opcode_db(db);
+
+    // use my_message_name variable in writeop*/sendop*/pollop* calls
 
     return 0;
 }
