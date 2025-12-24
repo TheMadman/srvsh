@@ -262,6 +262,7 @@ static pollfd_read_t process_pollfd(struct pollfd *fd, pollop_callback *callback
 		}
 
 		if (received == 0) {
+			fd->revents &= ~POLLIN;
 			return HANGUP;
 		}
 
