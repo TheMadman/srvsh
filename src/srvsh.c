@@ -1,3 +1,7 @@
+// TODO: maybe do something more POSIXy instead
+// of relying on execvpe
+#define _GNU_SOURCE // execvpe
+
 #include "srvsh/srvsh.h"
 
 #include <stdbool.h>
@@ -5,6 +9,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #include <ctype.h>
 #include <limits.h>
 #include <poll.h>
@@ -14,8 +19,6 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/uio.h>
-
-extern char **environ;
 
 typedef enum {
 	NO_WORK,
@@ -427,11 +430,100 @@ void close_cmsg_fds(struct msghdr header)
 	} while ((chdr = CMSG_NXTHDR(&header, chdr)));
 }
 
+static int get_clients_end()
+{
+	// probably a better way to do this
+	int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+	if (fd < 0)
+		return -1;
+
+	close(fd);
+	return fd;
+}
+
+static struct clistate exec_impl(
+	bool does_lookup,
+	const char *path,
+	char *const argv[],
+	char *const envp[],
+	bool (*cli_spawner)(void *context),
+	void *context
+)
+{
+	static const struct clistate error = { -1, -1 };
+	struct clistate result = error;
+	int (*const exec)(const char*, char *const[], char *const[])
+		= does_lookup ? execvpe : execve;
+
+	int sockets[2] = { -1, -1 };
+	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) < 0)
+		return error;
+
+	result.pid = fork();
+	switch (result.pid) {
+		case -1:
+			return error;
+		case 0: {
+			for (int sock = sockets[0]; sock > SRV_FILENO; sock--)
+				close(sock);
+			if (dup2(sockets[1], SRV_FILENO) < 0)
+				exit(1);
+			close(sockets[1]);
+
+			if (cli_spawner)
+				if (!cli_spawner(context))
+					exit(1);
+
+			int clients_end = get_clients_end();
+			if (clients_end < 0)
+				exit(1);
+
+			// 22 characters should be enough for a
+			// 64bit int + sign + null byte
+			// but if we end up with that many clients 
+			// or file descriptors I have other concerns
+			typedef char int64_str[22];
+			int64_str clients_end_str = { 0 };
+			if (
+				snprintf(
+					clients_end_str,
+					sizeof(clients_end_str),
+					"%d",
+					clients_end
+				) < 0
+			) {
+				exit(1);
+			}
+
+			const bool overwrite = true;
+			if (
+				setenv(
+					"SRVSH_CLIENTS_END",
+					clients_end_str,
+					overwrite
+				) < 0
+			) {
+				exit(1);
+			}
+
+			execve(path, argv, envp);
+			exit(1);
+		}
+		default:
+			close(sockets[1]);
+			result.socket = sockets[0];
+			return result;
+	}
+}
+
 static struct clistate execl_impl(
 	bool has_envp,
+	bool does_lookup,
 	const char *path,
 	const char *arg0,
-	va_list args
+	va_list args,
+	bool (*cli_spawner)(void *),
+	void *context
 )
 {
 	va_list args_for_length = { 0 };
@@ -456,7 +548,14 @@ static struct clistate execl_impl(
 		va_arg(args, char**) :
 		environ;
 
-	struct clistate result = cliexecve(path, argv, envp);
+	struct clistate result = exec_impl(
+		does_lookup,
+		path,
+		argv,
+		envp,
+		cli_spawner,
+		context
+	);
 
 	// could use a context-manager-like interface here but
 	// this function is (currently) tiny
@@ -468,10 +567,20 @@ static struct clistate execl_impl(
 
 struct clistate cliexecl(const char *path, const char *arg0, ...)
 {
-	(void)arg0;
 	va_list args = { 0 };
 	va_start(args, arg0);
-	struct clistate result = execl_impl(false, path, arg0, args);
+	const bool
+		has_env = false,
+		does_lookup = false;
+	struct clistate result = execl_impl(
+		has_env,
+		does_lookup,
+		path,
+		arg0,
+		args,
+		NULL,
+		NULL
+	);
 	va_end(args);
 	return result;
 }
@@ -480,7 +589,38 @@ struct clistate cliexecle(const char *path, const char *arg0, ...)
 {
 	va_list args = { 0 };
 	va_start(args, arg0);
-	struct clistate result = execl_impl(true, path, arg0, args);
+	const bool
+		has_env = true,
+		does_lookup = false;
+	struct clistate result = execl_impl(
+		has_env,
+		does_lookup,
+		path,
+		arg0,
+		args,
+		NULL,
+		NULL
+	);
+	va_end(args);
+	return result;
+}
+
+struct clistate cliexeclp(const char *path, const char *arg0, ...)
+{
+	va_list args = { 0 };
+	va_start(args, arg0);
+	const bool
+		has_env = true,
+		does_lookup = true;
+	struct clistate result = execl_impl(
+		has_env,
+		does_lookup,
+		path,
+		arg0,
+		args,
+		NULL,
+		NULL
+	);
 	va_end(args);
 	return result;
 }
@@ -492,68 +632,126 @@ struct clistate cliexecv(const char *path, char *const argv[])
 
 struct clistate cliexecve(const char *path, char *const argv[], char *const envp[])
 {
-	static const struct clistate error = { -1, -1 };
-	struct clistate result = error;
+	return srvexecve(
+		NULL,
+		NULL,
+		path,
+		argv,
+		envp
+	);
+}
 
-	int sockets[2] = { -1, -1 };
-	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) < 0)
-		return error;
+struct clistate srvexecl(
+	bool (*cli_spawner)(void *context),
+	void *context,
+	const char *path,
+	const char *arg0,
+	...
+)
+{
+	va_list args = { 0 };
+	va_start(args, arg0);
+	const bool
+		has_env = false,
+		does_lookup = false;
+	struct clistate result = execl_impl(
+		has_env,
+		does_lookup,
+		path,
+		arg0,
+		args,
+		cli_spawner,
+		context
+	);
+	va_end(args);
+	return result;
+}
 
-	result.pid = fork();
-	switch(result.pid) {
-		case -1:
-			return error;
+struct clistate srvexecle(
+	bool (*cli_spawner)(void *context),
+	void *context,
+	const char *path,
+	const char *arg0,
+	...
+)
+{
+	va_list args = { 0 };
+	va_start(args, arg0);
+	const bool
+		has_env = true,
+		does_lookup = false;
+	struct clistate result = execl_impl(
+		has_env,
+		does_lookup,
+		path,
+		arg0,
+		args,
+		cli_spawner,
+		context
+	);
+	va_end(args);
+	return result;
+}
 
-		case 0:
-			for (int sock = sockets[0]; sock > SRV_FILENO; sock--)
-				close(sock);
-			if (dup2(sockets[1], SRV_FILENO) < 0)
-				exit(1);
-			close(sockets[1]);
-			execve(path, argv, envp);
-			exit(1);
-		default:
-			close(sockets[1]);
-			result.socket = sockets[0];
-			return result;
-	}
+struct clistate srvexeclp(
+	bool (*cli_spawner)(void *context),
+	void *context,
+	const char *path,
+	const char *arg0,
+	...
+)
+{
+	va_list args = { 0 };
+	va_start(args, arg0);
+	const bool
+		has_env = true,
+		does_lookup = true;
+	struct clistate result = execl_impl(
+		has_env,
+		does_lookup,
+		path,
+		arg0,
+		args,
+		cli_spawner,
+		context
+	);
+	va_end(args);
+	return result;
 }
 
 struct clistate srvexecve(
+	bool (*cli_spawner)(void *context),
+	void *context,
 	const char *path,
 	char *const argv[],
-	char *const envp[],
-	bool (*cli_spawner)(void *context),
-	void *context
+	char *const envp[]
 )
 {
-	static const struct clistate error = { -1, -1 };
-	struct clistate result = error;
-
-	int sockets[2] = { -1, -1 };
-	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) < 0)
-		return error;
-
-	result.pid = fork();
-	switch (result.pid) {
-		case -1:
-			return error;
-		case 0:
-			for (int sock = sockets[0]; sock > SRV_FILENO; sock--)
-				close(sock);
-			if (dup2(sockets[1], SRV_FILENO) < 0)
-				exit(1);
-			close(sockets[1]);
-
-			if (cli_spawner)
-				if (!cli_spawner(context))
-					exit(1);
-
-			execve(path, argv, envp);
-			exit(1);
-		default:
-			close(sockets[1]);
-			result.socket = sockets[0];
-			return result;
-	}
+	return exec_impl(
+		false,
+		path,
+		argv,
+		envp,
+		cli_spawner,
+		context
+	);
 }
+
+struct clistate srvexecvpe(
+	bool (*cli_spawner)(void *context),
+	void *context,
+	const char *path,
+	char *const argv[],
+	char *const envp[]
+)
+{
+	return exec_impl(
+		true,
+		path,
+		argv,
+		envp,
+		cli_spawner,
+		context
+	);
+}
+

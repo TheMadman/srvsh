@@ -80,6 +80,24 @@ static int exec_word_list(word_list_t *words, int count)
 	return error;
 }
 
+static char** word_list_to_array(word_list_t *words, int count)
+{
+	char **error = NULL;
+	// +1 for the NULL terminator
+	LPTR_WITH(statement, (size_t)count + 1, sizeof(char*)) {
+		for (--count; count >= 0; --count) {
+			char **item = lptr_raw(
+				lptr_index(statement, count)
+			);
+			*item = lptr_raw(words->word);
+			words = words->next;
+		}
+
+		return lptr_raw(statement);
+	}
+	return error;
+}
+
 static token_t skip_context(token_t token)
 {
 	token = token_next(token);
@@ -242,28 +260,10 @@ static token_t parse_statement_impl(
 				return token_next(token);
 		}
 	} else /* if (token.type == lex_statement_separator) and friends */ {
-		int sockets[2] = { 0 };
-		if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) < 0)
-			return resource_error;
-		switch (fork()) {
-			case -1:
-				close(sockets[0]);
-				close(sockets[1]);
-				return resource_error;
-			case 0:
-				for (int i = sockets[0]; i > SRV_FILENO; i--)
-					close(i);
-				if (dup2(sockets[1], SRV_FILENO) < 0)
-					exit(1);
-				close(sockets[1]);
-				setenv("SRVSH_CLIENTS_END", STR(CLI_BEGIN), 1);
-				exec_word_list(previous, count);
-				exit(1);
-				break;
-			default:
-				close(sockets[1]);
-				return token;
-		}
+		char **statement = word_list_to_array(previous, count);
+		cliexecv(*statement, statement);
+		free(statement);
+		return token;
 	}
 
 	return token;

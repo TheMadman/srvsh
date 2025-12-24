@@ -386,6 +386,38 @@ struct clistate cliexecl(const char *path, const char *arg0, ...);
 /**
  * \brief Forks and executes the given command as a new client.
  *
+ * This function differs from cliexecl() in that it also searches for
+ * command in the same way that the shell would, given it does not contain
+ * a slash.
+ *
+ * Example usage:
+ *
+ * \code
+ * struct clistate client = cliexec(
+ * 	"/usr/bin/ls",
+ * 	"/usr/bin/ls",
+ * 	"-a",
+ * 	"/etc",
+ * 	NULL
+ * );
+ * // use client.socket to read/write to the client, and
+ * // client.pid to get the client's process ID
+ * \endcode
+ *
+ * \param command The command to execute.
+ * \param arg0 Arguments to pass to the command. Traditionally,
+ * 	the arg0 argument is the same as command. Must be terminated
+ * 	with a null terminator.
+ *
+ * \returns A new client socket and process ID for the
+ * 	client.
+ */
+
+struct clistate cliexeclp(const char *command, const char *arg0, ...);
+
+/**
+ * \brief Forks and executes the given command as a new client.
+ *
  * Example usage:
  *
  * \code
@@ -406,9 +438,9 @@ struct clistate cliexecl(const char *path, const char *arg0, ...);
  * \endcode
  *
  * \param command The path to an executable.
- * \param arg0 Arguments to pass to the command. Traditionally,
- * 	the arg0 argument is the same as path. Must be terminated
- * 	with a null terminator.
+ * \param arg0 Arguments to pass to the command, followed by a NULL
+ * 	terminator, followed by a `char**` argument to the environment
+ * 	to pass.
  *
  * \returns A new client socket and process ID for the
  * 	client.
@@ -477,9 +509,125 @@ struct clistate cliexecve(const char *path, char *const argv[], char *const envp
  * clients that are connected to the new server. Passing NULL will
  * spawn no clients.
  *
+ * \param cli_spawner a function taking a pointer and returning
+ * 	true on success or false on failure. If clients fail to spawn,
+ * 	the server is not spawned. A NULL pointer can be passed to spawn
+ * 	no clients.
+ * \param context A pointer to pass to cli_spawner.
+ * \param path The path to an executable.
+ * \param arg0 Arguments to pass to the command. Traditionally,
+ * 	the arg0 argument is the same as path. Must be terminated
+ * 	with a null terminator.
+ *
+ * \returns A new client socket and process ID for the server process.
+ * 	On failure, returns -1 for both.
+ */
+struct clistate srvexecl(
+	bool (*cli_launcher)(void *context),
+	void *context,
+	const char *path,
+	const char *arg0,
+	...
+);
+
+/**
+ * \brief Forks and executes the given command as a new server.
+ *
+ * The cli_spawner argument is a callback that will be run to spawn
+ * clients that are connected to the new server. Passing NULL will
+ * spawn no clients.
+ *
+ * This function differs from srvexecl() in that it also searches for
+ * command in the same way that the shell would, given it does not contain
+ * a slash.
+ *
+ * \param cli_spawner a function taking a pointer and returning
+ * 	true on success or false on failure. If clients fail to spawn,
+ * 	the server is not spawned. A NULL pointer can be passed to spawn
+ * 	no clients.
+ * \param context A pointer to pass to cli_spawner.
+ * \param path The path to an executable.
+ * \param arg0 Arguments to pass to the command. Traditionally,
+ * 	the arg0 argument is the same as path. Must be terminated
+ * 	with a null terminator.
+ *
+ * \returns A new client socket and process ID for the server process.
+ * 	On failure, returns -1 for both.
+ */
+struct clistate srvexeclp(
+	bool (*cli_launcher)(void *context),
+	void *context,
+	const char *path,
+	const char *arg0,
+	...
+);
+
+/**
+ * \brief Forks and executes the given command as a new server.
+ *
+ * The cli_spawner argument is a callback that will be run to spawn
+ * clients that are connected to the new server. Passing NULL will
+ * spawn no clients.
+ *
+ * \param cli_spawner a function taking a pointer and returning
+ * 	true on success or false on failure. If clients fail to spawn,
+ * 	the server is not spawned. A NULL pointer can be passed to spawn
+ * 	no clients.
+ * \param context A pointer to pass to cli_spawner.
+ * \param path The path to an executable.
+ * \param arg0 Arguments to pass to the command, followed by a NULL
+ * 	terminator, followed by a `char**` argument to the environment
+ * 	to pass.
+ *
+ * \returns A new client socket and process ID for the server process.
+ * 	On failure, returns -1 for both.
+ */
+struct clistate srvexecle(
+	bool (*cli_spawner)(void *context),
+	void *context,
+	const char *path,
+	const char *arg0,
+	...
+);
+
+/**
+ * \brief Forks and executes the given command as a new server.
+ *
+ * The cli_spawner argument is a callback that will be run to spawn
+ * clients that are connected to the new server. Passing NULL will
+ * spawn no clients.
+ *
+ * \param cli_spawner a function taking a pointer and returning
+ * 	true on success or false on failure. If clients fail to spawn,
+ * 	the server is not spawned. A NULL pointer can be passed to spawn
+ * 	no clients.
+ * \param context A pointer to pass to cli_spawner.
  * \param path The path to an executable.
  * \param argv NULL-terminated arguments to pass to the command. Traditionally,
  * 	the first argument is the same as the path.
+ * \param envp NULL-terminated array of environment variable definitions.
+ *
+ * \returns A new client socket and process ID for the server process.
+ * 	On failure, returns -1 for both.
+ */
+struct clistate srvexecve(
+	bool (*cli_spawner)(void *context),
+	void *context,
+	const char *path,
+	char *const argv[],
+	char *const envp[]
+);
+
+/**
+ * \brief Forks and executes the given command as a new server.
+ *
+ * The cli_spawner argument is a callback that will be run to spawn
+ * clients that are connected to the new server. Passing NULL will
+ * spawn no clients.
+ *
+ * \param command The command to execute.
+ * \param argv NULL-terminated arguments to pass to the command. Traditionally,
+ * 	the first argument is the same as the command.
  * \param envp NULL-terminated array of environment variable definitions.
  * \param cli_spawner a function taking a pointer and returning
  * 	true on success or false on failure. If clients fail to spawn,
@@ -490,12 +638,12 @@ struct clistate cliexecve(const char *path, char *const argv[], char *const envp
  * \returns A new client socket and process ID for the server process.
  * 	On failure, returns -1 for both.
  */
-struct clistate srvexecve(
-	const char *path,
-	char *const argv[],
-	char *const envp[],
+struct clistate srvexecvpe(
 	bool (*cli_spawner)(void *context),
-	void *context
+	void *context,
+	const char *command,
+	char *const argv[],
+	char *const envp[]
 );
 
 #ifdef __cplusplus
