@@ -432,8 +432,8 @@ struct clistate cliexecle(const char *path, const char *arg0, ...);
  * // client.pid to get the client's process ID
  * \endcode
  *
- * \param command The path to an executable.
- * \param argv Arguments to pass to the command. Traditionally,
+ * \param path The path to an executable.
+ * \param argv NULL-terminate arguments to pass to the command. Traditionally,
  * 	the first argument is the same as path.
  *
  * \returns A new client socket and process ID for the
@@ -441,6 +441,33 @@ struct clistate cliexecle(const char *path, const char *arg0, ...);
  */
 struct clistate cliexecv(const char *path, char *const argv[]);
 
+/**
+ * \brief Forks and executes the given command as a new client.
+ *
+ * Example usage:
+ *
+ * \code
+ * const char *argv[] = {
+ * 	"/usr/bin/ls",
+ * 	"-a",
+ * 	"/etc",
+ * 	NULL,
+ * };
+ * const char *envp[] = {
+ * 	"FOO=foo",
+ * 	NULL
+ * };
+ * struct clistate client = cliexec(argv[0], argv, envp);
+ * \endcode
+ *
+ * \param path The path to an executable.
+ * \param argv NULL-terminated arguments to pass to the command. Traditionally,
+ * 	the first argument is the same as the path.
+ * \param envp NULL-terminated array of environment variable definitions.
+ *
+ * \returns A new client socket and process ID for the
+ * 	client.
+ */
 struct clistate cliexecve(const char *path, char *const argv[], char *const envp[]);
 
 /**
