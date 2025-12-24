@@ -443,6 +443,34 @@ struct clistate cliexecv(const char *path, char *const argv[]);
 
 struct clistate cliexecve(const char *path, char *const argv[], char *const envp[]);
 
+/**
+ * \brief Forks and executes the given command as a new server.
+ *
+ * The cli_spawner argument is a callback that will be run to spawn
+ * clients that are connected to the new server. Passing NULL will
+ * spawn no clients.
+ *
+ * \param path The path to an executable.
+ * \param argv NULL-terminated arguments to pass to the command. Traditionally,
+ * 	the first argument is the same as the path.
+ * \param envp NULL-terminated array of environment variable definitions.
+ * \param cli_spawner a function taking a pointer and returning
+ * 	true on success or false on failure. If clients fail to spawn,
+ * 	the server is not spawned. A NULL pointer can be passed to spawn
+ * 	no clients.
+ * \param context A pointer to pass to cli_spawner.
+ *
+ * \returns A new client socket and process ID for the server process.
+ * 	On failure, returns -1 for both.
+ */
+struct clistate srvexecve(
+	const char *path,
+	char *const argv[],
+	char *const envp[],
+	bool (*cli_spawner)(void *context),
+	void *context
+);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif

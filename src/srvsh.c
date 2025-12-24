@@ -517,3 +517,42 @@ struct clistate cliexecve(const char *path, char *const argv[], char *const envp
 			return result;
 	}
 }
+
+struct clistate srvexecve(
+	const char *path,
+	char *const argv[],
+	char *const envp[],
+	bool (*cli_spawner)(void *context),
+	void *context
+)
+{
+	static const struct clistate error = { -1, -1 };
+	struct clistate result = error;
+
+	int sockets[2] = { -1, -1 };
+	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) < 0)
+		return error;
+
+	result.pid = fork();
+	switch (result.pid) {
+		case -1:
+			return error;
+		case 0:
+			for (int sock = sockets[0]; sock > SRV_FILENO; sock--)
+				close(sock);
+			if (dup2(sockets[1], SRV_FILENO) < 0)
+				exit(1);
+			close(sockets[1]);
+
+			if (cli_spawner)
+				if (!cli_spawner(context))
+					exit(1);
+
+			execve(path, argv, envp);
+			exit(1);
+		default:
+			close(sockets[1]);
+			result.socket = sockets[0];
+			return result;
+	}
+}
