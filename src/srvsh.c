@@ -429,11 +429,12 @@ void close_cmsg_fds(struct msghdr header)
 static struct clistate execl_impl(
 	bool has_envp,
 	const char *path,
+	const char *arg0,
 	va_list args
 )
 {
 	va_list args_for_length = { 0 };
-	int arglength = 0;
+	int arglength = 1;
 
 	va_copy(args_for_length, args);
 	const char *arg = NULL;
@@ -443,6 +444,7 @@ static struct clistate execl_impl(
 
 	// +1 for the null terminator
 	char **argv = calloc(arglength + 1, sizeof(char**));
+	memcpy(argv, &arg0, sizeof(*argv));
 	for (char **cur = argv; arglength; cur++, arglength--)
 		*cur = va_arg(args, char*);
 
@@ -465,9 +467,10 @@ static struct clistate execl_impl(
 
 struct clistate cliexecl(const char *path, const char *arg0, ...)
 {
+	(void)arg0;
 	va_list args = { 0 };
 	va_start(args, arg0);
-	struct clistate result = execl_impl(false, path, args);
+	struct clistate result = execl_impl(false, path, arg0, args);
 	va_end(args);
 	return result;
 }
@@ -476,7 +479,7 @@ struct clistate cliexecle(const char *path, const char *arg0, ...)
 {
 	va_list args = { 0 };
 	va_start(args, arg0);
-	struct clistate result = execl_impl(true, path, args);
+	struct clistate result = execl_impl(true, path, arg0, args);
 	va_end(args);
 	return result;
 }
