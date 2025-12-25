@@ -506,7 +506,7 @@ static struct clistate exec_impl(
 				exit(1);
 			}
 
-			execve(path, argv, envp);
+			exec(path, argv, envp);
 			exit(1);
 		}
 		default:
