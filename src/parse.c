@@ -44,17 +44,6 @@ typedef struct word_list_s {
 	struct word_list_s *next;
 } word_list_t;
 
-static int get_clients_end()
-{
-	// probably a better way to do this
-	int fd = socket(AF_UNIX, SOCK_STREAM, 0);
-	if (fd < 0)
-		return -1;
-
-	close(fd);
-	return fd;
-}
-
 static bool is_end_token(token_t token)
 {
 	return token.type == lex_end
