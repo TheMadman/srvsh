@@ -208,6 +208,11 @@ static token_t parse_statement_impl(
 			return resource_error;
 		srvexecvp(spawn_clients, &token, *statement, statement);
 		free(statement);
+
+		// Since we want to wait for the server spawned
+		// above, AND for the rest of parsing to finish,
+		// we just continue parsing in a child process
+		// and then wait for both
 		switch (fork()) {
 			case -1:
 				return resource_error;
