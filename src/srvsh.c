@@ -495,7 +495,8 @@ static struct clistate exec_impl(
 
 			environ = NULL;
 			for (char * const* env = envp; *env; env++) {
-				putenv(*env);
+				if (putenv(*env))
+					exit(1);
 			}
 
 			const bool overwrite = true;
