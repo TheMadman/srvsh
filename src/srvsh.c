@@ -1,7 +1,3 @@
-// TODO: maybe do something more POSIXy instead
-// of relying on execvpe
-#define _GNU_SOURCE // execvpe
-
 #include "srvsh/srvsh.h"
 
 #include <stdbool.h>
@@ -19,6 +15,8 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/uio.h>
+
+extern char **environ;
 
 typedef enum {
 	NO_WORK,
