@@ -218,6 +218,10 @@ static token_t parse_statement_impl(
 				return resource_error;
 			case 0:
 				token = skip_context(token);
+				if (token.type != lex_curly_block_end) {
+					token.type = lex_unexpected;
+					return token;
+				}
 				return token_next(token);
 			default:
 				exit(wait_all(0));
@@ -267,7 +271,6 @@ static token_t parse_script_impl(token_t token)
 int srvsh_parse_script(const_lptr_t script)
 {
 	token_t last = parse_script_impl(scallop_lang_lex_init(script));
-	const bool error = last.type == NULL
-		|| last.type == lex_unexpected;
+	const bool error = last.type != lex_end;
 	return error ? -1 : 0;
 }
