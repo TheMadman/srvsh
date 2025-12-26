@@ -11,7 +11,6 @@
 #include <scallop-lang/lex.h>
 
 #include "srvsh/srvsh.h"
-#include "srvsh/process.h"
 
 #define _STR(A) #A
 #define STR(A) _STR(A)
@@ -62,23 +61,6 @@ static bool is_end_token(token_t token)
 		|| token.type == lex_curly_block_end
 		|| token.type == lex_square_block_end
 		|| token.type == lex_unexpected;
-}
-
-static int exec_word_list(word_list_t *words, int count)
-{
-	int error = -1;
-	LPTR_WITH(statement, (size_t)count, sizeof(lptr_t)) {
-		for (--count; count >= 0; --count) {
-			const_lptr_t *item = lptr_raw(
-				lptr_index(statement, count)
-			);
-			*item = const_lptr(words->word);
-			words = words->next;
-		}
-
-		error = exec_command(const_lptr(statement));
-	}
-	return error;
 }
 
 static char** word_list_to_array(word_list_t *words, int count)
@@ -232,6 +214,8 @@ static token_t parse_statement_impl(
 			return resource_error;
 		cliexecvp(*statement, statement);
 		free(statement);
+
+		// TODO: this fork looks redundant
 		switch (fork()) {
 			case -1:
 				return resource_error;

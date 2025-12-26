@@ -1,6 +1,5 @@
 #include "srvsh/srvsh.h"
 #include "srvsh/parse.h"
-#include "srvsh/process.h"
 
 #include <stdio.h>
 #include <libgen.h>

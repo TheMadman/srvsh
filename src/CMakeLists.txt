@@ -7,7 +7,7 @@ target_include_directories(srvsh
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/srvsh>
 	$<INSTALL_INTERFACE:include>)
 
-add_executable(srvsh-bin main.c parse.c process.c)
+add_executable(srvsh-bin main.c parse.c)
 target_link_libraries(srvsh-bin srvsh)
 set_target_properties(srvsh-bin
 	PROPERTIES OUTPUT_NAME srvsh)
