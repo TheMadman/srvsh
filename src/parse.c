@@ -220,7 +220,7 @@ static token_t parse_statement_impl(
 
 static token_t parse_script_impl(token_t token)
 {
-	for (;!is_end_token(token);) {
+	while (!is_end_token(token)) {
 		token_t next = token_next(token);
 
 		if (next.type == lex_word) {
