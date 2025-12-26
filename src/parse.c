@@ -5,6 +5,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <wait.h>
+#include <errno.h>
 
 #include <scallop-lang/classifier.h>
 #include <scallop-lang/lex.h>
@@ -116,6 +117,27 @@ static token_t skip_context(token_t token)
 	return token;
 }
 
+static int wait_all(int waitgroup)
+{
+	int worst_exit = EXIT_SUCCESS;
+	int wstatus;
+	int wreturn;
+	while ((wreturn = waitpid(-waitgroup, &wstatus, 0))) {
+		if (wreturn < 0 && errno == ECHILD) {
+			return worst_exit;
+		}
+		if (wreturn < 0) {
+			perror("waitpid");
+			return 1;
+		}
+		if (WIFEXITED(wstatus))
+			worst_exit = MAX(worst_exit, WEXITSTATUS(wstatus));
+		else if (WIFSIGNALED(wstatus))
+			worst_exit = MAX(worst_exit, SIGNAL_RETURN_VALUE(WTERMSIG(wstatus)));
+	}
+	return worst_exit;
+}
+
 static token_t parse_statement_impl(
 	token_t token,
 	word_list_t *previous,
@@ -124,6 +146,16 @@ static token_t parse_statement_impl(
 static token_t parse_script_impl(
 	token_t token
 );
+
+static bool spawn_clients(void *context)
+{
+	token_t *token = context;
+	token_t result = parse_script_impl(*token);
+	const bool error = result.type == NULL
+		|| result.type == lex_unexpected;
+
+	return !error;
+}
 
 static token_t parse_statement_impl(
 	token_t token,
@@ -171,99 +203,34 @@ static token_t parse_statement_impl(
 		}
 		return result;
 	} else if (token.type == lex_curly_block) {
-		/*
-		 * This whole stupid confusing mess is to try to
-		 * prevent "younger siblings" from inheriting file
-		 * descriptors to their "older siblings", which are
-		 * intended to be opened _exclusively_ for their
-		 * parent. No, I don't know how to phrase that better.
-		 *
-		 * I _should_ think about this more, but I'm sick to
-		 * death of thinking about this as-is. Fuck elegant, I just
-		 * want this bastard to work.
-		 */
-		int sockets[2] = { 0 };
-		if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) < 0)
+		char **statement = word_list_to_array(previous, count);
+		if (!statement)
 			return resource_error;
+		srvexecvp(spawn_clients, &token, *statement, statement);
+		free(statement);
 		switch (fork()) {
 			case -1:
-				close(sockets[0]);
-				close(sockets[1]);
 				return resource_error;
 			case 0:
-				for (int i = sockets[0]; i > SRV_FILENO; i--)
-					close(i);
-				if (dup2(sockets[1], SRV_FILENO) < 0)
-					exit(1);
-				close(sockets[1]);
-				token = parse_script_impl(token);
-				const bool error = token.type == NULL
-					|| token.type == lex_unexpected;
-				if (error)
-					exit(1);
-				int clients_end = get_clients_end();
-				if (clients_end < 0)
-					exit(1);
-
-				// 21 characters should be enough for a 64
-				// bit integer + null terminator
-				// and if we have that many clients then
-				// I have other concerns
-				typedef char int64_str[21];
-				int64_str clients_end_str = { 0 };
-				if (
-					snprintf(
-						clients_end_str,
-						sizeof(clients_end_str),
-						"%d",
-						clients_end
-					) < 0
-				) {
-					exit(1);
-				}
-
-				const bool overwrite = true;
-				if (
-					setenv(
-						"SRVSH_CLIENTS_END",
-						clients_end_str,
-						overwrite
-					) < 0
-				) {
-					exit(1);
-				}
-				// I should clean this shit up sometime
-				switch (fork()) {
-					case -1:
-						exit(1);
-					case 0:
-						exec_word_list(previous, count);
-						exit(1);
-					default: {
-						int worst_return = EXIT_SUCCESS;
-						for (int wstatus = 0; wait(&wstatus) > 0;)
-							if (WIFEXITED(wstatus))
-								worst_return = MAX(worst_return, WEXITSTATUS(wstatus));
-							else if (WIFSIGNALED(wstatus))
-								worst_return = MAX(worst_return, SIGNAL_RETURN_VALUE(WTERMSIG(wstatus)));
-						exit(worst_return);
-					}
-				}
-			default:
-				close(sockets[1]);
 				token = skip_context(token);
-				if (token.type != lex_curly_block_end) {
-					// TODO: send signal to shutdown children?
-					token.type = lex_unexpected;
-					return token;
-				}
 				return token_next(token);
+			default:
+				exit(wait_all(0));
 		}
 	} else /* if (token.type == lex_statement_separator) and friends */ {
 		char **statement = word_list_to_array(previous, count);
-		cliexecv(*statement, statement);
+		if (!statement)
+			return resource_error;
+		cliexecvp(*statement, statement);
 		free(statement);
-		return token;
+		switch (fork()) {
+			case -1:
+				return resource_error;
+			case 0:
+				return token;
+			default:
+				exit(wait_all(0));
+		}
 	}
 
 	return token;

@@ -485,6 +485,32 @@ struct clistate cliexecv(const char *path, char *const argv[]);
  * 	"/etc",
  * 	NULL,
  * };
+ * struct clistate client = cliexec(argv[0], argv);
+ * // use client.socket to read/write to the client, and
+ * // client.pid to get the client's process ID
+ * \endcode
+ *
+ * \param path The path to an executable.
+ * \param argv NULL-terminate arguments to pass to the command. Traditionally,
+ * 	the first argument is the same as path.
+ *
+ * \returns A new client socket and process ID for the
+ * 	client.
+ */
+struct clistate cliexecvp(const char *command, char *const argv[]);
+
+/**
+ * \brief Forks and executes the given command as a new client.
+ *
+ * Example usage:
+ *
+ * \code
+ * const char *argv[] = {
+ * 	"/usr/bin/ls",
+ * 	"-a",
+ * 	"/etc",
+ * 	NULL,
+ * };
  * const char *envp[] = {
  * 	"FOO=foo",
  * 	NULL
@@ -501,6 +527,35 @@ struct clistate cliexecv(const char *path, char *const argv[]);
  * 	client.
  */
 struct clistate cliexecve(const char *path, char *const argv[], char *const envp[]);
+
+/**
+ * \brief Forks and executes the given command as a new client.
+ *
+ * Example usage:
+ *
+ * \code
+ * const char *argv[] = {
+ * 	"/usr/bin/ls",
+ * 	"-a",
+ * 	"/etc",
+ * 	NULL,
+ * };
+ * const char *envp[] = {
+ * 	"FOO=foo",
+ * 	NULL
+ * };
+ * struct clistate client = cliexec(argv[0], argv, envp);
+ * \endcode
+ *
+ * \param path The path to an executable.
+ * \param argv NULL-terminated arguments to pass to the command. Traditionally,
+ * 	the first argument is the same as the path.
+ * \param envp NULL-terminated array of environment variable definitions.
+ *
+ * \returns A new client socket and process ID for the
+ * 	client.
+ */
+struct clistate cliexecvpe(const char *path, char *const argv[], char *const envp[]);
 
 /**
  * \brief Forks and executes the given command as a new server.
@@ -588,6 +643,60 @@ struct clistate srvexecle(
 	const char *path,
 	const char *arg0,
 	...
+);
+
+/**
+ * \brief Forks and executes the given command as a new server.
+ *
+ * The cli_spawner argument is a callback that will be run to spawn
+ * clients that are connected to the new server. Passing NULL will
+ * spawn no clients.
+ *
+ * \param cli_spawner a function taking a pointer and returning
+ * 	true on success or false on failure. If clients fail to spawn,
+ * 	the server is not spawned. A NULL pointer can be passed to spawn
+ * 	no clients.
+ * \param context A pointer to pass to cli_spawner.
+ * \param path The path to an executable.
+ * \param argv NULL-terminated arguments to pass to the command. Traditionally,
+ * 	the first argument is the same as the path.
+ * \param envp NULL-terminated array of environment variable definitions.
+ *
+ * \returns A new client socket and process ID for the server process.
+ * 	On failure, returns -1 for both.
+ */
+struct clistate srvexecv(
+	bool (*cli_spawner)(void *context),
+	void *context,
+	const char *path,
+	char *const argv[]
+);
+
+/**
+ * \brief Forks and executes the given command as a new server.
+ *
+ * The cli_spawner argument is a callback that will be run to spawn
+ * clients that are connected to the new server. Passing NULL will
+ * spawn no clients.
+ *
+ * \param command The command to execute.
+ * \param argv NULL-terminated arguments to pass to the command. Traditionally,
+ * 	the first argument is the same as the command.
+ * \param envp NULL-terminated array of environment variable definitions.
+ * \param cli_spawner a function taking a pointer and returning
+ * 	true on success or false on failure. If clients fail to spawn,
+ * 	the server is not spawned. A NULL pointer can be passed to spawn
+ * 	no clients.
+ * \param context A pointer to pass to cli_spawner.
+ *
+ * \returns A new client socket and process ID for the server process.
+ * 	On failure, returns -1 for both.
+ */
+struct clistate srvexecvp(
+	bool (*cli_spawner)(void *context),
+	void *context,
+	const char *command,
+	char *const argv[]
 );
 
 /**

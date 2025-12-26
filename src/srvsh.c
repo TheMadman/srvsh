@@ -452,8 +452,8 @@ static struct clistate exec_impl(
 {
 	static const struct clistate error = { -1, -1 };
 	struct clistate result = error;
-	int (*const exec)(const char*, char *const[], char *const[])
-		= does_lookup ? execvpe : execve;
+	int (*const exec)(const char*, char *const[])
+		= does_lookup ? execvp : execv;
 
 	int sockets[2] = { -1, -1 };
 	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) < 0)
@@ -495,6 +495,11 @@ static struct clistate exec_impl(
 				exit(1);
 			}
 
+			environ = NULL;
+			for (char * const* env = envp; *env; env++) {
+				putenv(*env);
+			}
+
 			const bool overwrite = true;
 			if (
 				setenv(
@@ -506,7 +511,7 @@ static struct clistate exec_impl(
 				exit(1);
 			}
 
-			exec(path, argv, envp);
+			exec(path, argv);
 			exit(1);
 		}
 		default:
@@ -641,6 +646,22 @@ struct clistate cliexecve(const char *path, char *const argv[], char *const envp
 	);
 }
 
+struct clistate cliexecvp(const char *command, char *const argv[])
+{
+	return cliexecvpe(command, argv, environ);
+}
+
+struct clistate cliexecvpe(const char *path, char *const argv[], char *const envp[])
+{
+	return srvexecvpe(
+		NULL,
+		NULL,
+		path,
+		argv,
+		envp
+	);
+}
+
 struct clistate srvexecl(
 	bool (*cli_spawner)(void *context),
 	void *context,
@@ -737,6 +758,22 @@ struct clistate srvexecve(
 	);
 }
 
+struct clistate srvexecv(
+	bool (*cli_spawner)(void *context),
+	void *context,
+	const char *path,
+	char *const argv[]
+)
+{
+	return srvexecve(
+		cli_spawner,
+		context,
+		path,
+		argv,
+		environ
+	);
+}
+
 struct clistate srvexecvpe(
 	bool (*cli_spawner)(void *context),
 	void *context,
@@ -752,6 +789,22 @@ struct clistate srvexecvpe(
 		envp,
 		cli_spawner,
 		context
+	);
+}
+
+struct clistate srvexecvp(
+	bool (*cli_spawner)(void *context),
+	void *context,
+	const char *command,
+	char *const argv[]
+)
+{
+	return srvexecvpe(
+		cli_spawner,
+		context,
+		command,
+		argv,
+		environ
 	);
 }
 
