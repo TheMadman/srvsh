@@ -16,8 +16,10 @@
 
 // gettext placeholder
 #define _(str) str
-
+#define SIGNAL_RETURN_VALUE(sig) (128 + sig)
 #define perror_exit(str) perror(str), exit(EXIT_FAILURE)
+
+#define MAX libadt_util_max
 
 typedef struct scallop_lang_token token_t;
 typedef struct libadt_lptr lptr_t;
@@ -63,4 +65,20 @@ int main(int argc, char **argv)
 		fprintf(stderr, "%s\n", _("Error parsing script"));
 		exit(EXIT_FAILURE);
 	}
+
+	int worst_exit = EXIT_SUCCESS;
+	int wstatus;
+	int wreturn;
+	while ((wreturn = wait(&wstatus))) {
+		if (wreturn < 0 && errno == ECHILD)
+			exit(worst_exit);
+		if (wreturn < 0)
+			perror_exit(_("Waiting for children failed"));
+		if (WIFEXITED(wstatus))
+			worst_exit = MAX(worst_exit, WEXITSTATUS(wstatus));
+		else if (WIFSIGNALED(wstatus))
+			worst_exit = MAX(worst_exit, SIGNAL_RETURN_VALUE(WTERMSIG(wstatus)));
+	}
+	return worst_exit;
+
 }

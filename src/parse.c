@@ -4,7 +4,6 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <wait.h>
 #include <errno.h>
 
 #include <scallop-lang/classifier.h>
@@ -88,27 +87,6 @@ static token_t skip_context(token_t token)
 	return token;
 }
 
-static int wait_all(int waitgroup)
-{
-	int worst_exit = EXIT_SUCCESS;
-	int wstatus;
-	int wreturn;
-	while ((wreturn = waitpid(-waitgroup, &wstatus, 0))) {
-		if (wreturn < 0 && errno == ECHILD) {
-			return worst_exit;
-		}
-		if (wreturn < 0) {
-			perror("waitpid");
-			return 1;
-		}
-		if (WIFEXITED(wstatus))
-			worst_exit = MAX(worst_exit, WEXITSTATUS(wstatus));
-		else if (WIFSIGNALED(wstatus))
-			worst_exit = MAX(worst_exit, SIGNAL_RETURN_VALUE(WTERMSIG(wstatus)));
-	}
-	return worst_exit;
-}
-
 static token_t parse_statement_impl(
 	token_t token,
 	word_list_t *previous,
@@ -180,39 +158,19 @@ static token_t parse_statement_impl(
 		srvexecvp(spawn_clients, &token, *statement, statement);
 		free(statement);
 
-		// Since we want to wait for the server spawned
-		// above, AND for the rest of parsing to finish,
-		// we just continue parsing in a child process
-		// and then wait for both
-		switch (fork()) {
-			case -1:
-				return resource_error;
-			case 0:
-				token = skip_context(token);
-				if (token.type != lex_curly_block_end) {
-					token.type = lex_unexpected;
-					return token;
-				}
-				return token_next(token);
-			default:
-				exit(wait_all(0));
+		token = skip_context(token);
+		if (token.type != lex_curly_block_end) {
+			token.type = lex_unexpected;
+			return token;
 		}
+		return token_next(token);
 	} else /* if (token.type == lex_statement_separator) and friends */ {
 		char **statement = word_list_to_array(previous, count);
 		if (!statement)
 			return resource_error;
 		cliexecvp(*statement, statement);
 		free(statement);
-
-		// TODO: this fork looks redundant
-		switch (fork()) {
-			case -1:
-				return resource_error;
-			case 0:
-				return token;
-			default:
-				exit(wait_all(0));
-		}
+		return token;
 	}
 
 	return token;

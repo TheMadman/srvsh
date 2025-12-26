@@ -10,11 +10,18 @@
 #include <limits.h>
 #include <poll.h>
 #include <stdarg.h>
+#include <errno.h>
 
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/uio.h>
+#include <sys/wait.h>
+
+#include <libadt.h>
+
+#define MAX libadt_util_max
+#define SIGNAL_RETURN_VALUE(x) (128 + (x))
 
 extern char **environ;
 
@@ -24,6 +31,35 @@ typedef enum {
 	HANGUP,
 	ERROR,
 } pollfd_read_t;
+
+static void fork_waiter(
+	int (*exec)(const char *, char * const*),
+	const char *path,
+	char * const argv[]
+)
+{
+	switch (fork()) {
+		case -1:
+			exit(1);
+		case 0:
+			exec(path, argv);
+			exit(1);
+		default: {
+			int worst_exit = EXIT_SUCCESS;
+			int wstatus;
+			int wreturn;
+			while ((wreturn = wait(&wstatus))) {
+				if (wreturn < 0 && errno == ECHILD)
+					exit(worst_exit);
+				if (WIFEXITED(wstatus))
+					worst_exit = MAX(worst_exit, WEXITSTATUS(wstatus));
+				else if (WIFSIGNALED(wstatus))
+					worst_exit = MAX(worst_exit, SIGNAL_RETURN_VALUE(WTERMSIG(wstatus)));
+			}
+			exit(worst_exit);
+		}
+	}
+}
 
 int cli_end(void)
 {
@@ -263,7 +299,6 @@ static pollfd_read_t process_pollfd(struct pollfd *fd, pollop_callback *callback
 		}
 
 		if (received == 0) {
-			fd->revents &= ~POLLIN;
 			return HANGUP;
 		}
 
@@ -312,9 +347,10 @@ static pollfd_read_t process_pollfd(struct pollfd *fd, pollop_callback *callback
 		free(attempt);
 
 		return SUCCESSFUL_READ;
+	} else if (fd->revents & POLLHUP) {
+		return HANGUP;
 	} else if (
-		fd->revents & POLLHUP
-		|| fd->revents & POLLNVAL
+		fd->revents & POLLNVAL
 		|| fd->revents & POLLERR
 	) {
 		return ERROR;
@@ -345,13 +381,21 @@ struct pollfd pollopfds(
 	if (changed == 0)
 		return (struct pollfd) { 0 };
 
-	struct pollfd *fd;
-	for (fd = fds; changed > 0 && fd < &fds[count]; fd++) {
+	struct pollfd *fd = fds;
+	for (; changed > 0 && fd < &fds[count]; fd++) {
 		pollfd_read_t result = process_pollfd(fd, callback, context);
 		if (result == ERROR)
 			return err;
-		else if (result == HANGUP)
-			return *fd;
+		else if (result == HANGUP) {
+			fd->revents &= ~POLLIN;
+			fd->revents |= POLLHUP;
+			fd->fd = ~fd->fd;
+			return (struct pollfd) {
+				.fd = ~fd->fd,
+				.events = fd->events,
+				.revents = fd->revents,
+			};
+		}
 		else if (result == SUCCESSFUL_READ)
 			changed--;
 	}
@@ -510,8 +554,12 @@ static struct clistate exec_impl(
 				exit(1);
 			}
 
-			exec(path, argv);
-			exit(1);
+			if (cli_spawner) {
+				fork_waiter(exec, path, argv);
+			} else {
+				exec(path, argv);
+				exit(1);
+			}
 		}
 		default:
 			close(sockets[1]);
