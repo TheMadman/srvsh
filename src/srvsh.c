@@ -152,10 +152,13 @@ int get_opcode(const opcode_db *db, const char *name)
 	for (; *files; files++) {
 		char *value_end = *files;
 		for (const char *line = *files; *line; line = next_line(value_end)) {
-			if (line[0] == '#')
-				continue;
-
 			const char *name_start = skip_spaces(line);
+
+			if (name_start[0] == '#') {
+				value_end = name_start;
+				continue;
+			}
+
 			const char *name_end = skip_words(name_start);
 			const bool selected = !strncmp(name_start, name, len);
 			const bool common_prefix = selected && name_end - name_start != (ssize_t)len;
