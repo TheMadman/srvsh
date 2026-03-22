@@ -70,12 +70,15 @@ The interface that `libsrvsh` provides is based around a very primitive binary p
 ```
 # Lines beginning with a # are comment lines and are ignored
 my_message_name   1
-my_other_message  2
-another_name      3
+
+# the value is optional; if it is missing, it is the previous
+# value incremented.
+my_other_message
+another_name
 # etc.
 ```
 
-The path to this file can be set with the environment variable `OPCODE_DATABASE`. Writing applications which use the opcode database is simple:
+The path to this file can be set with the environment variable `OPCODE_DATABASE`, which is the recommended way to set the opcode database to open. Using the environment variable allows you to set a single path that all applications in your script will use. Writing applications which use the opcode database is simple:
 
 ```c
 #include <srvsh.h>
@@ -100,3 +103,14 @@ int main()
     return 0;
 }
 ```
+
+The `open_opcode_db_at(const char *path)` function is also provided, which may be useful for programs that speak multiple protocols (for example, one for clients, and another for the server).
+
+The path provided in `OPCODE_DATABASE` and as a parameter to `open_opcode_db_at(const char *path)` will be checked for a directory ending with `.d` as well, and will load files from that directory in file-name order. This makes it possible to extend the database by installing new files. If you create a directory structure like the following:
+```
+/etc/my-system/opcodes
+/etc/my-system/opcodes.d/00-my-module
+/etc/my-system/opcodes.d/10-third-party-module
+```
+
+Then setting `OPCODE_DATABASE=/etc/my-system/opcodes` will load those files in that order.
