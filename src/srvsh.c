@@ -11,6 +11,8 @@
 #include <poll.h>
 #include <stdarg.h>
 #include <errno.h>
+#include <stdarg.h>
+#include <glob.h>
 
 #include <sys/mman.h>
 #include <sys/socket.h>
@@ -21,7 +23,10 @@
 #include <libadt.h>
 
 #define MAX libadt_util_max
+#define MIN libadt_util_min
 #define SIGNAL_RETURN_VALUE(x) (128 + (x))
+
+#define WITH(NAME, SIZE) for (void *NAME = malloc(SIZE); NAME; free(NAME), NAME = NULL)
 
 extern char **environ;
 
@@ -31,6 +36,31 @@ typedef enum {
 	HANGUP,
 	ERROR,
 } pollfd_read_t;
+
+/*
+ * Returns the amount of space necessary for a null-terminated
+ * string. Always terminates the string with a null.
+ *
+ * Seriously, why does C leave footguns like this all over the
+ * place...?
+ */
+static int vslprintf(char *str, size_t size, const char *format, va_list list)
+{
+	int result = vsnprintf(str, size, format, list) + 1;
+	int last = MIN(result, size) - 1;
+	if (str && size > 0)
+		str[last] = '\0';
+	return result;
+}
+
+static int slprintf(char *str, size_t size, const char *format, ...)
+{
+	va_list list;
+	va_start(list, format);
+	int result = vslprintf(str, size, format, list);
+	va_end(list);
+	return result;
+}
 
 static void fork_waiter(
 	int (*exec)(const char *, char * const*),
@@ -104,47 +134,58 @@ static const char *skip_spaces(const char *str)
 	return str;
 }
 
+static const char *skip_words(const char *str)
+{
+	for (; *str; str++) {
+		if (!isalnum(*str) && !ispunct(*str))
+			break;
+	}
+	return str;
+}
+
 int get_opcode(const opcode_db *db, const char *name)
 {
+	char **files = (char **)db;
 	const size_t len = strlen(name);
-	for (const char *line = db; *line; line = next_line(line)) {
-		if (line[0] == '#')
-			continue;
+	int current = 0;
 
-		if (strncmp(line, name, len))
-			continue;
+	for (; *files; files++) {
+		char *value_end = *files;
+		for (const char *line = *files; *line; line = next_line(value_end)) {
+			if (line[0] == '#')
+				continue;
 
-		const char *value_start = skip_spaces(&line[len]);
-		const bool common_prefix = value_start == &line[len];
-		if (common_prefix) {
-			// The message name is a prefix for another
-			// opcode, skip 'till end of line
-			continue;
+			const char *name_start = skip_spaces(line);
+			const char *name_end = skip_words(name_start);
+			const bool selected = !strncmp(name_start, name, len);
+			const bool common_prefix = selected && name_end - name_start != (ssize_t)len;
+
+			long attempt = strtol(name_end, &value_end, 10);
+
+			const bool error
+				= attempt > INT_MAX
+				|| attempt < 0;
+
+			if (error)
+				return -1;
+
+			const bool autoval = value_end == name_end;
+
+			if (autoval)
+				current++;
+			else
+				current = (int)attempt;
+
+			if (selected && !common_prefix)
+				return current;
 		}
-
-		char *value_end = NULL;
-
-		long attempt = strtol(value_start, &value_end, 10);
-
-		const bool error
-			= value_end == value_start
-			|| attempt > INT_MAX
-			|| attempt < 0;
-
-		if (error)
-			return -1;
-
-		return (int)attempt;
 	}
 	return -1;
 }
 
-opcode_db *open_opcode_db(void)
+static char *map_path(const char *path)
 {
-	const char *db_path = getenv("OPCODE_DATABASE");
-	if (!db_path)
-		return NULL;
-	int fd = open(db_path, O_RDONLY);
+	int fd = open(path, O_RDONLY);
 	if (fd < 0)
 		return NULL;
 
@@ -154,7 +195,7 @@ opcode_db *open_opcode_db(void)
 		return NULL;
 	}
 
-	opcode_db *raw_file = mmap(
+	char *raw_file = mmap(
 		NULL,
 		(size_t)length,
 		PROT_READ,
@@ -164,6 +205,63 @@ opcode_db *open_opcode_db(void)
 	);
 	close(fd);
 	return raw_file;
+}
+
+opcode_db *open_opcode_db_at(const char *db_path)
+{
+	// haven't made up my mind whether it's better to return
+	// the pattern, the globs object, or the file contents
+	//
+	// in reality the best solution would probably to build
+	// a whole-ass hashtable or something but I'm far too
+	// lazy for that
+	//
+	// Also this function is a perfect example of why I hate
+	// returning heap-allocated memory. Whatever. Applications should
+	// call this at the beginning, get the codes they need, then
+	// free before doing any real work anyway.
+	if (!db_path)
+		return NULL;
+
+	int pattern_length = slprintf(NULL, 0, "%s{,.d/*}", db_path);
+	if (pattern_length < 0)
+		return NULL;
+
+	int success = 0;
+	char **result = NULL;
+	WITH(globs, sizeof(glob_t)) {
+		WITH(pattern, pattern_length) {
+			slprintf(pattern, pattern_length, "%s{,.d/*}", db_path);
+			success = !glob(pattern, GLOB_BRACE, NULL, globs);
+		}
+
+		// frees globs and breaks out
+		if (!success)
+			continue;
+
+		glob_t *glob_paths = (glob_t*)globs;
+		// memory fragmentation x(
+		result = calloc(
+			glob_paths->gl_pathc + 1,
+			sizeof(glob_t)
+		);
+
+		for (
+			char
+				**path = glob_paths->gl_pathv,
+				**c = result;
+			*path;
+			path++, c++
+		) {
+			*c = map_path(*path);
+		}
+	}
+	return result;
+}
+
+opcode_db *open_opcode_db(void)
+{
+	return open_opcode_db_at(getenv("OPCODE_DATABASE"));
 }
 
 ssize_t writesrv(int opcode, const void *buf, size_t len)
@@ -230,8 +328,12 @@ void close_opcode_db(opcode_db *db)
 	 * TODO: check if the file is null-terminated
 	 * plaintext in open_opcode_db()
 	 */
-	if (db)
-		munmap(db, strlen(db));
+	char **files = (char**)db;
+	if (files)
+		for (; *files; files++) {
+			munmap(*files, strlen(*files));
+		}
+	free(db);
 }
 
 int srvcli_polls(struct pollfd *fds, int buflen)
@@ -556,6 +658,9 @@ static struct clistate exec_impl(
 
 			if (cli_spawner) {
 				fork_waiter(exec, path, argv);
+				// the fork_waiter already calls exit() but this
+				// shuts the compiler up
+				exit(1);
 			} else {
 				exec(path, argv);
 				exit(1);

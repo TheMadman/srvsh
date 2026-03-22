@@ -288,11 +288,21 @@ void close_cmsg_fds(struct msghdr header);
 
 /**
  * \brief Returns a pointer to the opcode database
+ * 	at the given path.
+ *
+ * \param path The path to open as a database
+ * \returns NULL if the path cannot be opened for reading.
+ * 	Returns a pointer to the database on success.
+ */
+opcode_db *open_opcode_db_at(const char *path);
+
+/**
+ * \brief Returns a pointer to the opcode database
  * 	defined by the environment variable OPCODE_DATABASE.
  *
- * \returns NULL if OPCODE_DATABASE is not set, or the path cannot
- * 	be opened for reading. Returns a pointer to the database
- * 	otherwise.
+ * \returns NULL if OPCODE_DATABASE is not set, the path cannot
+ * 	be opened for reading.
+ * 	Returns a pointer to the database on success.
  */
 opcode_db *open_opcode_db(void);
 
@@ -300,7 +310,8 @@ opcode_db *open_opcode_db(void);
  * \brief Release an opcode database opened with
  * 	open_opcode_db().
  *
- * \param db A database previously opened with open_opcode_db().
+ * \param db A database previously opened with open_opcode_db()
+ * 	or open_opcode_db_at().
  */
 void close_opcode_db(opcode_db *db);
 
