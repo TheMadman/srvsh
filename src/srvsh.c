@@ -155,7 +155,7 @@ int get_opcode(const opcode_db *db, const char *name)
 			const char *name_start = skip_spaces(line);
 
 			if (name_start[0] == '#') {
-				value_end = name_start;
+				value_end = (char*)name_start;
 				continue;
 			}
 
@@ -232,32 +232,28 @@ opcode_db *open_opcode_db_at(const char *db_path)
 
 	int success = 0;
 	char **result = NULL;
-	WITH(globs, sizeof(glob_t)) {
-		WITH(pattern, pattern_length) {
-			slprintf(pattern, pattern_length, "%s{,.d/*}", db_path);
-			success = !glob(pattern, GLOB_BRACE, NULL, globs);
-		}
+	glob_t globs = { 0 };
+	WITH(pattern, pattern_length) {
+		slprintf(pattern, pattern_length, "%s{,.d/*}", db_path);
+		success = !glob(pattern, GLOB_BRACE, NULL, &globs);
+	}
 
-		// frees globs and breaks out
-		if (!success)
-			continue;
+	if (!success)
+		return NULL;
 
-		glob_t *glob_paths = (glob_t*)globs;
-		// memory fragmentation x(
-		result = calloc(
-			glob_paths->gl_pathc + 1,
-			sizeof(glob_t)
-		);
+	result = calloc(
+		globs.gl_pathc + 1,
+		sizeof(glob_t)
+	);
 
-		for (
-			char
-				**path = glob_paths->gl_pathv,
-				**c = result;
-			*path;
-			path++, c++
-		) {
-			*c = map_path(*path);
-		}
+	for (
+		char
+			**path = globs.gl_pathv,
+			**c = result;
+		*path;
+		path++, c++
+	) {
+		*c = map_path(*path);
 	}
 	return result;
 }
