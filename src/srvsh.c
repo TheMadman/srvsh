@@ -255,6 +255,7 @@ opcode_db *open_opcode_db_at(const char *db_path)
 	) {
 		*c = map_path(*path);
 	}
+	globfree(&globs);
 	return result;
 }
 
