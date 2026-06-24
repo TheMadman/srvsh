@@ -552,6 +552,9 @@ void close_cmsg_fds(struct msghdr header)
 		return;
 
 	struct cmsghdr *chdr = CMSG_FIRSTHDR(&header);
+	if (!chdr)
+		return;
+
 	do {
 		if (
 			chdr->cmsg_level != SOL_SOCKET
