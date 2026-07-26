@@ -75,6 +75,8 @@ static void fork_waiter(
 			exec(path, argv);
 			exit(1);
 		default: {
+			for (int i = cli_end(); -1 < i; i--)
+				close(i);
 			int worst_exit = EXIT_SUCCESS;
 			int wstatus;
 			int wreturn;
