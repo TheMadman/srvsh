@@ -56,7 +56,7 @@ typedef void opcode_db;
  * \brief Returns one past the last client file descriptor.
  *
  * All client file descriptors can be accessed with
- * for(int i = CLI_BEGIN; i < cli_end(); i++).
+ * `for(int i = CLI_BEGIN; i < cli_end(); i++)`.
  *
  * If there are no clients, CLI_BEGIN is returned.
  *

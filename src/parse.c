@@ -51,7 +51,7 @@ static bool is_end_token(token_t token)
 		|| token.type == lex_unexpected;
 }
 
-static char** word_list_to_array(word_list_t *words, int count)
+static char **word_list_to_array(word_list_t *words, int count)
 {
 	char **error = NULL;
 	// +1 for the NULL terminator

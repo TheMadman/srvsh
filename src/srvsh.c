@@ -472,8 +472,6 @@ struct pollfd pollopfds(
 {
 	static const struct pollfd err = {.fd = -1};
 
-	fds->events = POLLIN;
-
 	if (count < 0)
 		return err;
 
@@ -487,6 +485,7 @@ struct pollfd pollopfds(
 
 	struct pollfd *fd = fds;
 	for (; changed > 0 && fd < &fds[count]; fd++) {
+		fd->events = POLLIN;
 		pollfd_read_t result = process_pollfd(fd, callback, context);
 		if (result == ERROR)
 			return err;
@@ -550,9 +549,6 @@ struct pollfd pollop(
 
 void close_cmsg_fds(struct msghdr header)
 {
-	if (!header.msg_control)
-		return;
-
 	struct cmsghdr *chdr = CMSG_FIRSTHDR(&header);
 	if (!chdr)
 		return;
