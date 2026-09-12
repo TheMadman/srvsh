@@ -475,6 +475,9 @@ struct pollfd pollopfds(
 	if (count < 0)
 		return err;
 
+	for (struct pollfd *fd = fds; fd < &fds[count]; fd++)
+		fd->events = POLLIN;
+
 	int changed = poll(fds, count, timeout);
 
 	if (changed < 0)
@@ -485,7 +488,6 @@ struct pollfd pollopfds(
 
 	struct pollfd *fd = fds;
 	for (; changed > 0 && fd < &fds[count]; fd++) {
-		fd->events = POLLIN;
 		pollfd_read_t result = process_pollfd(fd, callback, context);
 		if (result == ERROR)
 			return err;
